@@ -62,9 +62,14 @@ const HALLS=['Ground floor – Indoor','Ground floor – Outdoor','1st floor','2
 const LS=['New','Contacted','Site visit','Negotiating','Won','Lost'];
 const TYPES=['Wedding','Reception','Engagement','Birthday','Anniversary','Corporate','Religious / Pooja','Other'];
 const SRC=['Walk-in','Phone call','Instagram','Facebook','Google','Referral','Website','Other'];
+// To stay inside Firebase's free daily reads, only recent data is loaded:
+// bookings from the start of last month onward (plus any month being viewed),
+// and to-dos / attendance for the month being viewed.
+let evRecent=[],evPast=[],monthSubs=[];
 let db,auth,admin=false,uid='',uname='',tab='cal',cur=new Date(),ready=false,lf='Open',lq='';
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=()=>ymd(new Date());
+const cutoff=ymd(new Date(new Date().getFullYear(),new Date().getMonth()-1,1));
 const fd=k=>new Date(k+'T00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
 const ft=t=>t?new Date(t).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'–';
 const words=t=>(t.trim().match(/\S+/g)||[]).length;
@@ -145,13 +150,14 @@ function vTasks(){
  <div><label>Date</label><input id="t_date" type="date" value="${today()}"></div><div><label>Title</label><input id="t_title" placeholder="e.g. Ground floor setup"></div>
  <div class="wide"><label>Checklist (one item per line)</label><textarea id="t_items" rows="5"></textarea></div></div><button class="b" data-a="addtask">Assign</button></div>`;
  const ts=myTasks().sort((a,b)=>a.date<b.date?1:-1);
- return h+(ts.map(taskCard).join('')||'<p class="mute">No to-do lists yet.</p>');
+ return h+monthBar()+(ts.map(taskCard).join('')||'<p class="mute">No to-do lists this month.</p>');
 }
+const monthBar=()=>`<div class="bar"><button class="b alt sm" data-a="prev">‹ Prev</button><h2>${cur.toLocaleString('en-IN',{month:'long',year:'numeric'})}</h2><button class="b alt sm" data-a="next">Next ›</button></div>`;
 function vAtt(){
  const mk=ymd(cur).slice(0,7),rows=S.att.filter(a=>a.date.startsWith(mk));
  const hrs=a=>a.out?((a.out-a.in)/36e5):0;
- let h=`<div class="bar"><button class="b alt sm" data-a="prev">‹ Prev</button><h2>${cur.toLocaleString('en-IN',{month:'long',year:'numeric'})}</h2><button class="b alt sm" data-a="next">Next ›</button></div>`;
- if(!admin){
+ let h=monthBar();
+ if(!admin&&mk==today().slice(0,7)){
   const t=S.att.find(a=>a.id==uid+'_'+today());
   h+=`<div class="card row"><div><h3>Today</h3><span class="mute">${t?`In ${ft(t.in)} · Out ${ft(t.out)}`:'Not clocked in'}</span></div>
   ${!t?'<button class="b" data-a="in">Clock in</button>':!t.out?'<button class="b" data-a="out">Clock out</button>':'<span class="tag g">Day complete</span>'}</div>`;
@@ -217,7 +223,7 @@ function saveFile(name,text){
 }
 function vPay(){
  const ev=[...S.ev].sort((a,b)=>a.date<b.date?1:-1);
- return `<div class="row" style="margin-bottom:10px"><span></span><button class="b alt sm" data-a="exportbook">Export bookings (Excel/CSV)</button></div><div class="card"><table class="tbl"><tr><th>Event</th><th>Total ₹</th><th>Paid ₹</th><th>Balance</th><th>Status</th><th></th></tr>`+
+ return `<div class="row" style="margin-bottom:10px"><span class="mute">Bookings from ${fd(cutoff)} onward. Older ones are in the export.</span><button class="b alt sm" data-a="exportbook">Export bookings (Excel/CSV)</button></div><div class="card"><table class="tbl"><tr><th>Event</th><th>Total ₹</th><th>Paid ₹</th><th>Balance</th><th>Status</th><th></th></tr>`+
  ev.map(x=>{const p=payInfo(x.id);return `<tr><td>${e(x.event)}<div class="mute">${e(x.host)} · ${fd(x.date)}</div></td>
  <td><input id="p_t_${x.id}" type="number" value="${p.total}"></td><td><input id="p_p_${x.id}" type="number" value="${p.paid}"></td><td>₹${p.bal}</td><td>${stTag(p.st)}</td>
  <td><button class="b sm" data-a="savepay" data-i="${x.id}">Save</button></td></tr>`}).join('')+`</table>${ev.length?'':'<p class="mute">Add a function to track its payments.</p>'}</div>`;
@@ -228,8 +234,8 @@ const sure=(b,fn)=>{if(b.dataset.s)return fn();b.dataset.s=1;b.textContent='Tap 
 const v=k=>$('#'+k).value.trim();
 const A={
  tab:i=>{tab=i;render()},
- prev:()=>{cur=new Date(cur.getFullYear(),cur.getMonth()-1,1);render()},
- next:()=>{cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);render()},
+ prev:()=>{cur=new Date(cur.getFullYear(),cur.getMonth()-1,1);subMonth();render()},
+ next:()=>{cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);subMonth();render()},
  close:closeM,day:openDay,newev:k=>evForm(k),editev:id=>evForm(null,id),
  saveev:async(id,b)=>{
   const d={event:v('f_event'),hall:v('f_hall'),host:v('f_host'),guests:+v('f_guests')||0,date:v('f_date'),from:v('f_from'),to:v('f_to'),res:v('f_res'),fac:$('#f_fac').value};
@@ -244,10 +250,11 @@ const A={
  addtask:async()=>{
   const to=v('t_to'),m=S.team.find(z=>z.id==to),items=$('#t_items').value.split('\n').map(s=>s.trim()).filter(Boolean).map(t=>({t,d:false}));
   if(!to||!v('t_title')||!items.length)return toast('Pick a teammate, title and at least one item');
-  await db.collection('tasks').add({to,toName:m.name,date:v('t_date'),title:v('t_title'),items});toast('Assigned');
+  const date=v('t_date');await db.collection('tasks').add({to,toName:m.name,date,ym:date.slice(0,7),title:v('t_title'),items});
+  toast(date.slice(0,7)==ymd(cur).slice(0,7)?'Assigned':'Assigned for '+fd(date));
  },
  deltask:(id,b)=>sure(b,()=>db.doc('tasks/'+id).delete()),
- in:()=>db.doc('attendance/'+uid+'_'+today()).set({uid,name:uname,date:today(),in:Date.now()}),
+ in:()=>db.doc('attendance/'+uid+'_'+today()).set({uid,name:uname,date:today(),ym:today().slice(0,7),in:Date.now()}),
  out:()=>db.doc('attendance/'+uid+'_'+today()).update({out:Date.now()}),
  newlead:()=>leadForm(),editlead:id=>leadForm(id),lfilter:k=>{lf=k;render()},
  savelead:async id=>{
@@ -265,8 +272,11 @@ const A={
  },
  exportleads:()=>saveFile('hall-desk-leads-'+today()+'.csv',csv([['Name','Phone','Email','Event type','Wanted date','Guests','Budget','Preferred hall','Source','Status','Next follow-up','Notes','Note history','Added by','Added on'],
   ...S.leads.map(l=>[l.name,l.phone,l.email,l.type,l.date,l.guests||'',l.budget||'',l.hall,l.source,l.status,l.next,l.notes,(l.log||[]).map(n=>`${new Date(n.at).toLocaleString('en-IN')} ${n.by}: ${n.t}`).join(' | '),l.byName,l.at?ymd(new Date(l.at)):''])])),
- exportbook:()=>saveFile('hall-desk-bookings-'+today()+'.csv',csv([['Date','Start','End','Event','Hall','Host','Guests','Residence','Phone','Email','Total','Paid','Balance','Payment status','Facility notes'],
-  ...[...S.ev].sort((a,b)=>a.date>b.date?1:-1).map(x=>{const c=S.ct[x.id]||{},p=payInfo(x.id);return[x.date,x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,p.total,p.paid,p.bal,p.st,x.fac]})])),
+ exportbook:async()=>{
+  // the screen only holds recent bookings, so fetch them all for the export
+  let all;try{all=(await db.collection('events').get()).docs.map(x=>({id:x.id,...x.data()}))}catch(x){return toast('Could not load bookings')}
+  saveFile('hall-desk-bookings-'+today()+'.csv',csv([['Date','Start','End','Event','Hall','Host','Guests','Residence','Phone','Email','Total','Paid','Balance','Payment status','Facility notes'],
+  ...all.sort((a,b)=>a.date>b.date?1:-1).map(x=>{const c=S.ct[x.id]||{},p=payInfo(x.id);return[x.date,x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,p.total,p.paid,p.bal,p.st,x.fac]})]))},
  dellead:(id,b)=>sure(b,()=>db.doc('leads/'+id).delete()),
  savepay:async id=>{await db.doc('payments/'+id).set({total:+v('p_t_'+id)||0,paid:+v('p_p_'+id)||0});toast('Payment updated')}
 };
@@ -307,25 +317,45 @@ function boot(a,d){
   if(!st||!st.exists){showLogin('This account is not on the staff list yet. Ask the admin to add '+u.email+'.');$('#who').innerHTML='<button class="b alt sm" data-a="logout">Sign out</button>';return}
   const s=st.data();admin=s.role=='admin';uid=u.uid;uname=s.name||u.email.split('@')[0];ready=true;
   $('#who').innerHTML=`${e(uname)}<button class="b alt sm" data-a="logout">Sign out</button>`;
-  const sub=(q,f)=>q.onSnapshot(s=>{f(s.docs.map(x=>({id:x.id,...x.data()})));render()},x=>console.error(x));
-  const col=p=>db.collection(p);
-  sub(col('events'),x=>S.ev=x);
+  sub(col('events').where('date','>=',cutoff),x=>{evRecent=x;mergeEv()});
   if(admin){
-   sub(col('tasks'),x=>S.tasks=x);sub(col('attendance'),x=>S.att=x);sub(col('team'),x=>S.team=x);
+   sub(col('team'),x=>S.team=x);
    sub(col('leads'),x=>S.leads=x);sub(col('contacts'),x=>{S.ct={};x.forEach(c=>S.ct[c.id]=c)});sub(col('payments'),x=>{S.pay={};x.forEach(c=>S.pay[c.id]=c)});
-  }else{
-   // team members only see their own to-dos and attendance
-   sub(col('tasks').where('to','==',uid),x=>S.tasks=x);sub(col('attendance').where('uid','==',uid),x=>S.att=x);
-   db.doc('team/'+uid).set({name:uname,email:u.email.toLowerCase()}).catch(()=>{});
-  }
+   addMonthField();
+  }else db.doc('team/'+uid).set({name:uname,email:u.email.toLowerCase()}).catch(()=>{});
+  subMonth();
   render();
  });
+}
+const sub=(q,f)=>q.onSnapshot(s=>{f(s.docs.map(x=>({id:x.id,...x.data()})));render()},x=>console.error(x));
+const col=p=>db.collection(p);
+const mergeEv=()=>{const m={};[...evRecent,...evPast].forEach(x=>m[x.id]=x);S.ev=Object.values(m)};
+// (re)load the month on screen: its to-dos, attendance, and bookings if older than the cutoff
+function subMonth(){
+ monthSubs.forEach(u=>u());monthSubs=[];S.tasks=[];S.att=[];evPast=[];mergeEv();
+ const ym=ymd(cur).slice(0,7),nx=ymd(new Date(cur.getFullYear(),cur.getMonth()+1,1));
+ // team members only see their own to-dos and attendance
+ const tq=admin?col('tasks'):col('tasks').where('to','==',uid),aq=admin?col('attendance'):col('attendance').where('uid','==',uid);
+ monthSubs.push(sub(tq.where('ym','==',ym),x=>S.tasks=x),sub(aq.where('ym','==',ym),x=>S.att=x));
+ if(ym+'-01'<cutoff)monthSubs.push(sub(col('events').where('date','>=',ym+'-01').where('date','<',nx),x=>{evPast=x;mergeEv()}));
+}
+// one-time: give older to-dos and attendance records the month field the app now loads by
+async function addMonthField(){
+ try{if(localStorage.getItem('hd_ym_done'))return}catch(x){}
+ try{
+  for(const c of ['tasks','attendance']){
+   const s=await col(c).get();
+   for(const d of s.docs){const x=d.data();if(!x.ym&&x.date)await db.doc(c+'/'+d.id).update({ym:x.date.slice(0,7)})}
+  }
+  try{localStorage.setItem('hd_ym_done','1')}catch(x){}
+  subMonth();
+ }catch(x){console.error(x)}
 }
 </script>
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,sendPasswordResetEmail,signOut} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import {getFirestore,collection,doc,getDoc,setDoc,updateDoc,deleteDoc,addDoc,onSnapshot,query,where} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import {getFirestore,collection,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,addDoc,onSnapshot,query,where} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 const C=window.FIREBASE_CONFIG;
 if(!C||!C.apiKey||C.apiKey.startsWith('PASTE'))document.getElementById('view').innerHTML='<p>Setup not finished: add your Firebase settings to <b>config.js</b> (see README).</p>';
 else{
@@ -333,7 +363,7 @@ else{
  if(window.USE_EMULATORS)await window.USE_EMULATORS(a,fs); // local testing only
  // small wrapper so the app code can keep its db.collection(...).doc(...) style
  const D=r=>({id:r.id,set:x=>setDoc(r,x),update:x=>updateDoc(r,x),delete:()=>deleteDoc(r),get:async()=>{const s=await getDoc(r);return{exists:s.exists(),data:()=>s.data()}}});
- const Q=q=>({where:(f,o,v)=>Q(query(q,where(f,o,v))),onSnapshot:(next,err)=>onSnapshot(q,next,err)});
+ const Q=q=>({where:(f,o,v)=>Q(query(q,where(f,o,v))),onSnapshot:(next,err)=>onSnapshot(q,next,err),get:()=>getDocs(q)});
  const db={collection:p=>{const c=collection(fs,p);return{...Q(c),doc:id=>D(id?doc(c,id):doc(c)),add:x=>addDoc(c,x).then(D)}},doc:p=>D(doc(fs,p))};
  const auth={onAuthStateChanged:f=>onAuthStateChanged(a,f),signInWithEmailAndPassword:(e,p)=>signInWithEmailAndPassword(a,e,p),sendPasswordResetEmail:e=>sendPasswordResetEmail(a,e),signOut:()=>signOut(a)};
  boot(auth,db);
