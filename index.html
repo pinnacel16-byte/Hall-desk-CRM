@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hall Desk</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<style>
+:root{--bg:#f1f4f3;--card:#fff;--ink:#16201f;--mute:#5d6b69;--line:#d6dfdc;--acc:#14645f;--gold:#e0a526;--red:#c62828;--redbg:#fde4e2;--grn:#1b7a3d;--grnbg:#dff3e6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1716;--card:#18231f;--ink:#e8efed;--mute:#9bb0ab;--line:#2c3d38;--acc:#4fb8ae;--redbg:#4a1f1d;--grnbg:#173a26;--red:#ff8a80;--grn:#6fd48f}}
+:root[data-theme="dark"]{--bg:#0f1716;--card:#18231f;--ink:#e8efed;--mute:#9bb0ab;--line:#2c3d38;--acc:#4fb8ae;--redbg:#4a1f1d;--grnbg:#173a26;--red:#ff8a80;--grn:#6fd48f}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 'Bricolage Grotesque',system-ui,sans-serif}
+header{padding:18px 16px 0;max-width:1100px;margin:auto}
+h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.5px}h1 span{color:var(--gold)}
+h2{margin:0;font-size:20px}h3{margin:0 0 6px;font-size:16px}
+.pill{font-size:12px;background:var(--acc);color:#fff;border-radius:99px;padding:2px 10px;margin-left:8px;vertical-align:middle;font-weight:600}
+nav{display:flex;gap:4px;overflow-x:auto;margin-top:12px;border-bottom:2px solid var(--line)}
+nav button{background:none;border:0;padding:10px 14px;font:inherit;font-weight:600;color:var(--mute);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+nav button.on{color:var(--acc);border-color:var(--gold)}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dow{text-align:center;font-size:12px;color:var(--mute);padding:4px 0}
+.day{min-height:96px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px;cursor:pointer;text-align:left;font:inherit;color:inherit;overflow:hidden;display:flex;flex-direction:column;gap:2px}
+.day.red{background:var(--redbg);border-color:var(--red)}.day.grn{background:var(--grnbg);border-color:var(--grn)}
+.day.now .n{background:var(--gold);color:#222;border-radius:99px;padding:0 6px}
+.n{font-weight:700;font-size:13px;align-self:flex-start}
+.chip{font-size:11px;background:var(--acc);color:#fff;border-radius:4px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prog{font-size:11px;font-weight:700}.red .prog{color:var(--red)}.grn .prog{color:var(--grn)}
+button.b,.b{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+.b.alt{background:none;color:var(--acc);border:1px solid var(--acc)}.b.dng{background:none;color:var(--red);border:1px solid var(--red)}.b.sm{padding:4px 10px;font-size:13px}
+input,select,textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+label{font-size:13px;color:var(--mute);display:block}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:10px}
+.wide{grid-column:1/-1}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{font-size:12px;border-radius:99px;padding:2px 10px;font-weight:600;background:var(--line)}
+.tag.r{background:var(--redbg);color:var(--red)}.tag.g{background:var(--grnbg);color:var(--grn)}.tag.y{background:#fbe9b7;color:#6b4b00}
+.mute{color:var(--mute);font-size:13px}pre{white-space:pre-wrap;font:inherit;margin:4px 0}
+.chk{display:flex;gap:8px;align-items:center;padding:4px 0}.chk input{width:20px;height:20px}
+#modal{position:fixed;inset:0;background:#0007;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:20px 10px;z-index:9}
+#modal.on{display:flex}#modal .box{background:var(--bg);border-radius:12px;padding:16px;width:100%;max-width:680px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;display:none;z-index:10}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}.tbl td,.tbl th{padding:6px;border-bottom:1px solid var(--line);text-align:left}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.note{border-left:3px solid var(--gold);padding:2px 0 2px 8px;margin:6px 0}
+.addn{display:flex;gap:6px}.addn input{flex:1}
+.login{max-width:380px;margin:40px auto}.login input{margin-bottom:10px}
+#who{float:right;font-size:13px;color:var(--mute);margin-top:8px}#who button{margin-left:8px}
+@media(max-width:640px){.day{min-height:64px}.chip{font-size:9px}}
+</style></head>
+<body>
+<header><span id="who"></span><h1>Hall <span>Desk</span><span class="pill" id="role"></span></h1><nav id="nav"></nav></header>
+<main id="view"><p class="mute">Loading…</p></main>
+<div id="modal"><div class="box" id="mbox"></div></div><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S={ev:[],ct:{},pay:{},leads:[],tasks:[],att:[],team:[]};
+const HALLS=['Ground floor – Indoor','Ground floor – Outdoor','1st floor','2nd floor'];
+const LS=['New','Contacted','Site visit','Negotiating','Won','Lost'];
+const TYPES=['Wedding','Reception','Engagement','Birthday','Anniversary','Corporate','Religious / Pooja','Other'];
+const SRC=['Walk-in','Phone call','Instagram','Facebook','Google','Referral','Website','Other'];
+let db,auth,admin=false,uid='',uname='',tab='cal',cur=new Date(),ready=false,lf='Open',lq='';
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=()=>ymd(new Date());
+const fd=k=>new Date(k+'T00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+const ft=t=>t?new Date(t).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'–';
+const words=t=>(t.trim().match(/\S+/g)||[]).length;
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
+function modal(h){$('#mbox').innerHTML=h;$('#modal').classList.add('on')}
+function closeM(){$('#modal').classList.remove('on');$('#mbox').innerHTML=''}
+const myTasks=()=>S.tasks.filter(t=>admin||t.to===uid);
+const tally=k=>{let a=0,d=0;myTasks().filter(t=>t.date===k).forEach(t=>t.items.forEach(i=>{a++;if(i.d)d++}));return{a,d}};
+const payInfo=id=>{const p=S.pay[id]||{total:0,paid:0};const bal=p.total-p.paid;return{...p,bal,st:p.total&&bal<=0?'Paid':p.paid>0?'Partial':'Unpaid'}};
+const stTag=s=>`<span class="tag ${s=='Paid'?'g':s=='Partial'?'y':'r'}">${s}</span>`;
+const booked=k=>S.ev.filter(x=>x.date==k).length;
+const isOpen=l=>!['Won','Lost'].includes(l.status);
+const dv=x=>x.tagName=='SELECT'?([...x.options].find(o=>o.defaultSelected)||x.options[0]||{}).value:x.defaultValue;
+
+/* ---------- views ---------- */
+function render(){
+ if(!ready)return;
+ const tabs=admin?[['cal','Calendar'],['tasks','Team to-do'],['att','Attendance'],['leads','Leads'],['pay','Payments']]:[['cal','Calendar'],['tasks','My to-do'],['att','My attendance']];
+ $('#nav').innerHTML=tabs.map(([k,l])=>`<button class="${tab==k?'on':''}" data-a="tab" data-i="${k}">${l}</button>`).join('');
+ $('#role').textContent=admin?'Admin':'Team';
+ // keep what someone is typing when a teammate's change re-renders the view
+ const keep={},a=document.activeElement,fid=a&&$('#view').contains(a)?a.id:'';
+ let sel=null;try{if(fid&&a.selectionStart!=null)sel=[a.selectionStart,a.selectionEnd]}catch(x){}
+ $('#view').querySelectorAll('input[id],textarea[id],select[id]').forEach(x=>{if(x.value!==dv(x))keep[x.id]=x.value});
+ $('#view').innerHTML={cal:vCal,tasks:vTasks,att:vAtt,leads:vLeads,pay:vPay}[tab]();
+ for(const k in keep){const x=document.getElementById(k);if(x)x.value=keep[k]}
+ const f=fid&&document.getElementById(fid);if(f){f.focus();try{if(sel)f.setSelectionRange(...sel)}catch(x){}}
+}
+function vCal(){
+ const y=cur.getFullYear(),m=cur.getMonth(),first=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate();
+ let h=`<div class="bar"><button class="b alt sm" data-a="prev">‹ Prev</button><h2>${cur.toLocaleString('en-IN',{month:'long',year:'numeric'})}</h2><button class="b alt sm" data-a="next">Next ›</button></div><div class="grid">`+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<b class="dow">${d}</b>`).join('');
+ for(let i=0;i<first;i++)h+='<i></i>';
+ for(let d=1;d<=n;d++){
+  const k=ymd(new Date(y,m,d)),ev=S.ev.filter(x=>x.date==k).sort((a,b)=>a.from>b.from?1:-1),t=tally(k);
+  const c=t.a?(t.d<t.a?'red':'grn'):'';
+  h+=`<button class="day ${c} ${k==today()?'now':''}" data-a="day" data-i="${k}"><span class="n">${d}</span>${ev.map(x=>`<span class="chip">${e(x.from)} ${e(x.event)}</span>`).join('')}${t.a?`<span class="prog">${t.d}/${t.a} done</span>`:''}</button>`;
+ }
+ return h+`</div><p class="mute">Red day = to-dos still pending. Green = all ticked. Up to 3 functions per day.</p>`;
+}
+function evCard(x){
+ const ct=S.ct[x.id]||{},p=payInfo(x.id);
+ return `<div class="card"><div class="row"><h3>${e(x.event)}</h3><span class="tag">${e(x.hall)}</span></div>
+ <div class="mute">${e(x.from)}${x.to?' – '+e(x.to):''} · Host: <b>${e(x.host)}</b> · ${x.guests} guests${x.res?' · '+e(x.res):''}</div>
+ ${admin?`<div class="mute">Contact: ${e(ct.phone||'–')} ${e(ct.email||'')} · Payment: ${stTag(p.st)} ₹${p.paid}/₹${p.total}</div>`:''}
+ <label>Facility notes</label><pre>${e(x.fac||'–')}</pre>
+ ${admin?`<div class="row"><button class="b sm" data-a="editev" data-i="${x.id}">Edit</button><button class="b dng sm" data-a="delev" data-i="${x.id}">Delete</button></div>`:''}</div>`;
+}
+function openDay(k){
+ const ev=S.ev.filter(x=>x.date==k).sort((a,b)=>a.from>b.from?1:-1);
+ const ts=myTasks().filter(t=>t.date==k);
+ modal(`<div class="bar"><h2>${fd(k)}</h2><button class="b alt sm" data-a="close">Close</button></div>
+ ${ev.map(evCard).join('')||'<p class="mute">No functions booked.</p>'}
+ ${ts.length?`<div class="card"><h3>To-dos this day</h3>${ts.map(t=>`<div class="mute">${e(t.toName||'')}: ${e(t.title)} — ${t.items.filter(i=>i.d).length}/${t.items.length}</div>`).join('')}</div>`:''}
+ ${admin&&ev.length<3?`<button class="b" data-a="newev" data-i="${k}">Add function (${ev.length}/3)</button>`:ev.length>=3?'<p class="mute">Day is full (3 functions).</p>':''}`);
+}
+function evForm(k,id,pre={}){
+ const x=S.ev.find(z=>z.id==id)||{date:k,hall:HALLS[0],guests:'',fac:'',...pre},c=S.ct[id]||{phone:pre.phone,email:pre.email},p=payInfo(id||'');
+ if(!id&&pre.total)p.total=pre.total;
+ const i=(f,l,v,t='text')=>`<div><label>${l}</label><input id="f_${f}" type="${t}" value="${e(v??'')}"></div>`;
+ modal(`<h2>${id?'Edit':'New'} function</h2><div class="f">${i('event','Event','' + (x.event||''))}
+ <div><label>Hall</label><select id="f_hall">${HALLS.map(h=>`<option ${h==x.hall?'selected':''}>${h}</option>`).join('')}</select></div>
+ ${i('host','Host name',x.host)}${i('guests','Guest count',x.guests,'number')}${i('date','Date',x.date,'date')}${i('from','Start time',x.from,'time')}${i('to','End time',x.to,'time')}${i('res','Residence',x.res)}
+ ${i('phone','Contact phone',c.phone)}${i('email','Contact email',c.email)}${i('total','Total amount ₹',p.total||'','number')}${i('paid','Paid so far ₹',p.paid||'','number')}
+ <div class="wide"><label>Facility notes · <span id="wc">${words(x.fac||'')}</span> words (room for 500+)</label><textarea id="f_fac" rows="12" maxlength="12000">${e(x.fac)}</textarea></div></div>
+ <div class="row"><button class="b" data-a="saveev" data-i="${id||''}" data-l="${e(pre.lead||'')}">Save function</button><button class="b alt" data-a="close">Cancel</button></div>`);
+}
+function taskCard(t){
+ const d=t.items.filter(i=>i.d).length,mine=!admin&&t.to===uid,all=d==t.items.length;
+ return `<div class="card"><div class="row"><h3>${e(t.title)}</h3><span class="tag ${all?'g':'r'}">${d}/${t.items.length} done</span></div>
+ <div class="mute">${fd(t.date)}${admin?' · '+e(t.toName):''}</div>
+ ${t.items.map((i,n)=>`<label class="chk" style="color:var(--ink)"><input type="checkbox" ${i.d?'checked':''} ${mine?`data-c="tick" data-i="${t.id}" data-n="${n}"`:'disabled'}>${e(i.t)}</label>`).join('')}
+ ${admin?`<button class="b dng sm" data-a="deltask" data-i="${t.id}">Delete</button>`:''}</div>`;
+}
+function vTasks(){
+ let h='';
+ if(admin)h+=`<div class="card"><h3>Assign a to-do list</h3><div class="f">
+ <div><label>Teammate</label><select id="t_to">${S.team.map(m=>`<option value="${m.id}">${e(m.name)}</option>`).join('')||'<option value="">No teammates have joined yet</option>'}</select></div>
+ <div><label>Date</label><input id="t_date" type="date" value="${today()}"></div><div><label>Title</label><input id="t_title" placeholder="e.g. Ground floor setup"></div>
+ <div class="wide"><label>Checklist (one item per line)</label><textarea id="t_items" rows="5"></textarea></div></div><button class="b" data-a="addtask">Assign</button></div>`;
+ const ts=myTasks().sort((a,b)=>a.date<b.date?1:-1);
+ return h+(ts.map(taskCard).join('')||'<p class="mute">No to-do lists yet.</p>');
+}
+function vAtt(){
+ const mk=ymd(cur).slice(0,7),rows=S.att.filter(a=>a.date.startsWith(mk));
+ const hrs=a=>a.out?((a.out-a.in)/36e5):0;
+ let h=`<div class="bar"><button class="b alt sm" data-a="prev">‹ Prev</button><h2>${cur.toLocaleString('en-IN',{month:'long',year:'numeric'})}</h2><button class="b alt sm" data-a="next">Next ›</button></div>`;
+ if(!admin){
+  const t=S.att.find(a=>a.id==uid+'_'+today());
+  h+=`<div class="card row"><div><h3>Today</h3><span class="mute">${t?`In ${ft(t.in)} · Out ${ft(t.out)}`:'Not clocked in'}</span></div>
+  ${!t?'<button class="b" data-a="in">Clock in</button>':!t.out?'<button class="b" data-a="out">Clock out</button>':'<span class="tag g">Day complete</span>'}</div>`;
+ }
+ const people=admin?S.team:[{id:uid,name:uname}];
+ people.forEach(p=>{
+  const r=rows.filter(a=>a.uid==p.id).sort((a,b)=>a.date>b.date?1:-1),tot=r.reduce((s,a)=>s+hrs(a),0);
+  h+=`<div class="card"><div class="row"><h3>${e(p.name)}</h3><span class="mute">${r.length} days present · ${tot.toFixed(1)} h</span></div>
+  <table class="tbl"><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th></tr>${r.map(a=>`<tr><td>${fd(a.date)}</td><td>${ft(a.in)}</td><td>${ft(a.out)}</td><td>${a.out?hrs(a).toFixed(1):'–'}</td></tr>`).join('')||'<tr><td colspan=4 class="mute">No records</td></tr>'}</table></div>`;
+ });
+ return h;
+}
+function vLeads(){
+ const t=today(),open=S.leads.filter(isOpen),due=open.filter(l=>l.next&&l.next<=t).length;
+ const fs=[['Open',open.length],['Due',due],...LS.map(s=>[s,S.leads.filter(l=>l.status==s).length]),['All',S.leads.length]];
+ return `<div class="row" style="margin-bottom:10px"><button class="b" data-a="newlead">+ New lead</button><button class="b alt sm" data-a="exportleads">Export leads (Excel/CSV)</button></div>
+ <input id="lq" placeholder="Search name, phone, event, notes…" value="${e(lq)}" style="margin-bottom:8px">
+ <div class="chips">${fs.map(([k,n])=>`<button class="b sm ${lf==k?'':'alt'}" data-a="lfilter" data-i="${k}">${k=='Due'?'Follow-up due':k} (${n})</button>`).join('')}</div>
+ <div id="llist">${leadList()}</div>`;
+}
+function leadList(){
+ const t=today(),q=lq.toLowerCase();
+ const ls=S.leads.filter(l=>lf=='All'||(lf=='Open'?isOpen(l):lf=='Due'?isOpen(l)&&l.next&&l.next<=t:l.status==lf))
+  .filter(l=>!q||[l.name,l.phone,l.email,l.type,l.source,l.notes,...(l.log||[]).map(n=>n.t)].join(' ').toLowerCase().includes(q))
+  .sort((a,b)=>(a.next||'9')>(b.next||'9')?1:-1);
+ return ls.map(leadCard).join('')||`<p class="mute">${S.leads.length?'No leads match.':'No leads yet. Tap “+ New lead” to add the first one.'}</p>`;
+}
+function clashTag(k){const n=booked(k);return n>=3?'<span class="tag r">Date full (3/3)</span>':n?`<span class="tag y">${n}/3 booked that day</span>`:'<span class="tag g">Date free</span>'}
+function leadCard(l){
+ const t=today(),o=isOpen(l),late=o&&l.next&&l.next<t,dueT=o&&l.next==t;
+ const meta=[e(l.type||'Event'),l.date?'wants '+fd(l.date):'date TBD',l.guests?l.guests+' guests':'',l.budget?'budget ₹'+l.budget:'',e(l.hall||''),l.source?'via '+e(l.source):''].filter(Boolean).join(' · ');
+ const log=(l.log||[]).slice().reverse();
+ return `<div class="card"><div class="row"><h3>${e(l.name)} <span class="mute">${e(l.phone)}${l.email?' · '+e(l.email):''}</span></h3>
+ <span>${late?'<span class="tag r">Follow-up overdue</span> ':dueT?'<span class="tag y">Follow up today</span> ':''}${o&&l.date?clashTag(l.date):''}</span></div>
+ <div class="mute">${meta}</div>${l.notes?`<pre>${e(l.notes)}</pre>`:''}
+ ${log.map(x=>`<div class="note"><b>${e(x.by)}</b> <span class="mute">${new Date(x.at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><pre>${e(x.t)}</pre></div>`).join('')}
+ <div class="f"><div><label>Status</label><select data-c="lstatus" data-i="${l.id}">${LS.map(s=>`<option ${s==l.status?'selected':''}>${s}</option>`).join('')}</select></div>
+ <div><label>Next follow-up</label><input type="date" value="${l.next||''}" data-c="lnext" data-i="${l.id}"></div>
+ <div class="wide addn"><input id="ln_${l.id}" placeholder="Add a note: call outcome, visit feedback…"><button class="b sm" data-a="addnote" data-i="${l.id}">Add note</button></div></div>
+ <div class="row"><span class="mute">Added by ${e(l.byName||'–')}${l.at?' on '+fd(ymd(new Date(l.at))):''}</span>
+ <span class="row"><button class="b alt sm" data-a="editlead" data-i="${l.id}">Edit</button>${l.status!='Lost'?`<button class="b sm" data-a="booklead" data-i="${l.id}">Book function</button>`:''}<button class="b dng sm" data-a="dellead" data-i="${l.id}">Delete</button></span></div></div>`;
+}
+function leadForm(id){
+ const l=S.leads.find(z=>z.id==id)||{next:today(),type:TYPES[0],source:SRC[0],hall:''};
+ const i=(f,lb,val,t='text')=>`<div><label>${lb}</label><input id="l_${f}" type="${t}" value="${e(val??'')}"></div>`;
+ const s=(f,lb,opts,val)=>`<div><label>${lb}</label><select id="l_${f}">${opts.map(o=>`<option value="${e(o)}" ${o==(val||'')?'selected':''}>${e(o||'No preference')}</option>`).join('')}</select></div>`;
+ modal(`<h2>${id?'Edit':'New'} lead</h2><div class="f">${i('name','Name *',l.name)}${i('phone','Phone',l.phone,'tel')}${i('email','Email',l.email,'email')}
+ ${s('type','Event type',TYPES,l.type)}${i('date','Wanted date',l.date,'date')}${i('guests','Guest count',l.guests||'','number')}${i('budget','Budget ₹',l.budget||'','number')}
+ ${s('hall','Preferred hall',['',...HALLS],l.hall)}${s('source','How they found us',SRC,l.source)}${i('next','Next follow-up',l.next,'date')}
+ <div class="wide" id="l_clash"></div>
+ <div class="wide"><label>Notes</label><textarea id="l_notes" rows="3">${e(l.notes)}</textarea></div></div>
+ <div class="row"><button class="b" data-a="savelead" data-i="${id||''}">Save lead</button><button class="b alt" data-a="close">Cancel</button></div>`);
+ clashMsg();
+}
+function clashMsg(){
+ const el=$('#l_clash'),k=$('#l_date')&&$('#l_date').value;if(!el)return;
+ el.innerHTML=!k?'':clashTag(k)+(booked(k)?` <span class="mute">${S.ev.filter(x=>x.date==k).map(x=>e(x.hall)+' '+e(x.from)).join(', ')}</span>`:'');
+}
+const csv=rows=>rows.map(r=>r.map(c=>{c=String(c??'');return /[",\r\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c}).join(',')).join('\r\n');
+function saveFile(name,text){
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+text],{type:'text/csv'}));a.download=name;a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function vPay(){
+ const ev=[...S.ev].sort((a,b)=>a.date<b.date?1:-1);
+ return `<div class="row" style="margin-bottom:10px"><span></span><button class="b alt sm" data-a="exportbook">Export bookings (Excel/CSV)</button></div><div class="card"><table class="tbl"><tr><th>Event</th><th>Total ₹</th><th>Paid ₹</th><th>Balance</th><th>Status</th><th></th></tr>`+
+ ev.map(x=>{const p=payInfo(x.id);return `<tr><td>${e(x.event)}<div class="mute">${e(x.host)} · ${fd(x.date)}</div></td>
+ <td><input id="p_t_${x.id}" type="number" value="${p.total}"></td><td><input id="p_p_${x.id}" type="number" value="${p.paid}"></td><td>₹${p.bal}</td><td>${stTag(p.st)}</td>
+ <td><button class="b sm" data-a="savepay" data-i="${x.id}">Save</button></td></tr>`}).join('')+`</table>${ev.length?'':'<p class="mute">Add a function to track its payments.</p>'}</div>`;
+}
+
+/* ---------- actions ---------- */
+const sure=(b,fn)=>{if(b.dataset.s)return fn();b.dataset.s=1;b.textContent='Tap again to confirm'};
+const v=k=>$('#'+k).value.trim();
+const A={
+ tab:i=>{tab=i;render()},
+ prev:()=>{cur=new Date(cur.getFullYear(),cur.getMonth()-1,1);render()},
+ next:()=>{cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);render()},
+ close:closeM,day:openDay,newev:k=>evForm(k),editev:id=>evForm(null,id),
+ saveev:async(id,b)=>{
+  const d={event:v('f_event'),hall:v('f_hall'),host:v('f_host'),guests:+v('f_guests')||0,date:v('f_date'),from:v('f_from'),to:v('f_to'),res:v('f_res'),fac:$('#f_fac').value};
+  if(!d.event||!d.host||!d.date||!d.from)return toast('Add event, host, date and start time');
+  if(S.ev.filter(x=>x.date==d.date&&x.id!=id).length>=3)return toast('That day already has 3 functions');
+  const r=id?db.collection('events').doc(id):db.collection('events').doc();
+  try{await r.set(d);await db.doc('contacts/'+r.id).set({phone:v('f_phone'),email:v('f_email')});
+  await db.doc('payments/'+r.id).set({total:+v('f_total')||0,paid:+v('f_paid')||0});
+  if(b.dataset.l)await db.doc('leads/'+b.dataset.l).update({status:'Won'});closeM();toast('Saved')}catch(x){toast('Could not save')}
+ },
+ delev:(id,b)=>sure(b,async()=>{await db.doc('events/'+id).delete();await db.doc('contacts/'+id).delete();await db.doc('payments/'+id).delete();closeM()}),
+ addtask:async()=>{
+  const to=v('t_to'),m=S.team.find(z=>z.id==to),items=$('#t_items').value.split('\n').map(s=>s.trim()).filter(Boolean).map(t=>({t,d:false}));
+  if(!to||!v('t_title')||!items.length)return toast('Pick a teammate, title and at least one item');
+  await db.collection('tasks').add({to,toName:m.name,date:v('t_date'),title:v('t_title'),items});toast('Assigned');
+ },
+ deltask:(id,b)=>sure(b,()=>db.doc('tasks/'+id).delete()),
+ in:()=>db.doc('attendance/'+uid+'_'+today()).set({uid,name:uname,date:today(),in:Date.now()}),
+ out:()=>db.doc('attendance/'+uid+'_'+today()).update({out:Date.now()}),
+ newlead:()=>leadForm(),editlead:id=>leadForm(id),lfilter:k=>{lf=k;render()},
+ savelead:async id=>{
+  const d={name:v('l_name'),phone:v('l_phone'),email:v('l_email'),type:v('l_type'),date:v('l_date'),guests:+v('l_guests')||0,budget:+v('l_budget')||0,hall:v('l_hall'),source:v('l_source'),next:v('l_next'),notes:$('#l_notes').value};
+  if(!d.name)return toast('Add a name');
+  try{if(id)await db.doc('leads/'+id).update(d);else await db.collection('leads').add({...d,status:'New',by:uid,byName:uname,at:Date.now(),log:[]});closeM();toast('Lead saved')}catch(x){toast('Could not save')}
+ },
+ addnote:async id=>{
+  const el=$('#ln_'+id),t=el.value.trim(),l=S.leads.find(z=>z.id==id);if(!t||!l)return;el.value='';
+  try{await db.doc('leads/'+id).update({log:[...(l.log||[]),{t,by:uname,at:Date.now()}]})}catch(x){el.value=t;toast('Could not save note')}
+ },
+ booklead:id=>{
+  const l=S.leads.find(z=>z.id==id);if(!l)return;if(l.date&&booked(l.date)>=3)return toast('That date already has 3 functions');
+  evForm(l.date||today(),null,{event:l.type,host:l.name,guests:l.guests||'',hall:l.hall||HALLS[0],phone:l.phone,email:l.email,total:l.budget||'',lead:id});
+ },
+ exportleads:()=>saveFile('hall-desk-leads-'+today()+'.csv',csv([['Name','Phone','Email','Event type','Wanted date','Guests','Budget','Preferred hall','Source','Status','Next follow-up','Notes','Note history','Added by','Added on'],
+  ...S.leads.map(l=>[l.name,l.phone,l.email,l.type,l.date,l.guests||'',l.budget||'',l.hall,l.source,l.status,l.next,l.notes,(l.log||[]).map(n=>`${new Date(n.at).toLocaleString('en-IN')} ${n.by}: ${n.t}`).join(' | '),l.byName,l.at?ymd(new Date(l.at)):''])])),
+ exportbook:()=>saveFile('hall-desk-bookings-'+today()+'.csv',csv([['Date','Start','End','Event','Hall','Host','Guests','Residence','Phone','Email','Total','Paid','Balance','Payment status','Facility notes'],
+  ...[...S.ev].sort((a,b)=>a.date>b.date?1:-1).map(x=>{const c=S.ct[x.id]||{},p=payInfo(x.id);return[x.date,x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,p.total,p.paid,p.bal,p.st,x.fac]})])),
+ dellead:(id,b)=>sure(b,()=>db.doc('leads/'+id).delete()),
+ savepay:async id=>{await db.doc('payments/'+id).set({total:+v('p_t_'+id)||0,paid:+v('p_p_'+id)||0});toast('Payment updated')}
+};
+document.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(b&&A[b.dataset.a])A[b.dataset.a](b.dataset.i,b)});
+document.addEventListener('input',ev=>{const id=ev.target.id;
+ if(id=='f_fac')$('#wc').textContent=words(ev.target.value);
+ if(id=='l_date')clashMsg();
+ if(id=='lq'){lq=ev.target.value;$('#llist').innerHTML=leadList()}
+});
+document.addEventListener('change',ev=>{
+ const t=ev.target,c=t.dataset.c;if(!c)return;
+ if(c=='tick'){const k=S.tasks.find(x=>x.id==t.dataset.i),items=k.items.map((i,n)=>n==+t.dataset.n?{...i,d:t.checked}:i);db.doc('tasks/'+k.id).update({items})}
+ if(c=='lstatus')db.doc('leads/'+t.dataset.i).update({status:t.value});
+ if(c=='lnext')db.doc('leads/'+t.dataset.i).update({next:t.value});
+});
+
+/* ---------- sign-in ---------- */
+function showLogin(msg){
+ $('#nav').innerHTML='';$('#role').textContent='';$('#who').innerHTML='';
+ $('#view').innerHTML=`<div class="card login"><h2>Sign in</h2><p class="mute">${e(msg||'Use the email and password your admin gave you.')}</p>
+ <label>Email</label><input id="li_email" type="email" autocomplete="username"><label>Password</label><input id="li_pass" type="password" autocomplete="current-password">
+ <div class="row"><button class="b" data-a="login">Sign in</button><button class="b alt sm" data-a="forgot">Forgot password?</button></div></div>`;
+}
+Object.assign(A,{
+ login:async()=>{try{await auth.signInWithEmailAndPassword(v('li_email'),$('#li_pass').value)}catch(x){toast(x.code=='auth/too-many-requests'?'Too many tries, wait a minute':'Wrong email or password')}},
+ forgot:async()=>{if(!v('li_email'))return toast('Type your email first');try{await auth.sendPasswordResetEmail(v('li_email'))}catch(x){}toast('If that account exists, a reset email is on its way')},
+ logout:()=>auth.signOut().then(()=>location.reload())
+});
+document.addEventListener('keydown',ev=>{if(ev.key=='Enter'&&ev.target.id=='li_pass')A.login()});
+
+/* ---------- boot ---------- */
+(()=>{
+ if(!window.FIREBASE_CONFIG||!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey.startsWith('PASTE')){$('#view').innerHTML='<p>Setup not finished: add your Firebase settings to <b>config.js</b> (see README).</p>';return}
+ firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();db=firebase.firestore();
+ auth.onAuthStateChanged(async u=>{
+  if(!u)return showLogin();
+  // staff/<email> lists who may use the app and their role ("admin" or "team")
+  let st;try{st=await db.doc('staff/'+u.email.toLowerCase()).get()}catch(x){st=null}
+  if(!st||!st.exists){showLogin('This account is not on the staff list yet. Ask the admin to add '+u.email+'.');$('#who').innerHTML='<button class="b alt sm" data-a="logout">Sign out</button>';return}
+  const s=st.data();admin=s.role=='admin';uid=u.uid;uname=s.name||u.email.split('@')[0];ready=true;
+  $('#who').innerHTML=`${e(uname)}<button class="b alt sm" data-a="logout">Sign out</button>`;
+  const sub=(q,f)=>q.onSnapshot(s=>{f(s.docs.map(x=>({id:x.id,...x.data()})));render()},x=>console.error(x));
+  const col=p=>db.collection(p);
+  sub(col('events'),x=>S.ev=x);
+  if(admin){
+   sub(col('tasks'),x=>S.tasks=x);sub(col('attendance'),x=>S.att=x);sub(col('team'),x=>S.team=x);
+   sub(col('leads'),x=>S.leads=x);sub(col('contacts'),x=>{S.ct={};x.forEach(c=>S.ct[c.id]=c)});sub(col('payments'),x=>{S.pay={};x.forEach(c=>S.pay[c.id]=c)});
+  }else{
+   // team members only see their own to-dos and attendance
+   sub(col('tasks').where('to','==',uid),x=>S.tasks=x);sub(col('attendance').where('uid','==',uid),x=>S.att=x);
+   db.doc('team/'+uid).set({name:uname,email:u.email.toLowerCase()}).catch(()=>{});
+  }
+  render();
+ });
+})();
+</script></body></html>

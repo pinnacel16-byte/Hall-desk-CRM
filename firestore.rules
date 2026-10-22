@@ -1,0 +1,54 @@
+rules_version = '2';
+// Hall Desk security rules. Paste this whole file into
+// Firebase console → Firestore Database → Rules, then press Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function email() { return request.auth.token.email.lower(); }
+    function staffDoc() { return /databases/$(database)/documents/staff/$(email()); }
+    // Only people listed in the "staff" collection can use the app at all
+    function isStaff() { return request.auth != null && exists(staffDoc()); }
+    function isAdmin() { return isStaff() && get(staffDoc()).data.role == 'admin'; }
+    function isMe(id) { return request.auth != null && request.auth.uid == id; }
+    function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+
+    // Staff list is managed by the owner in the Firebase console
+    match /staff/{e} {
+      allow read: if request.auth != null && (email() == e || isAdmin());
+      allow write: if false;
+    }
+
+    // Admin only: leads, booking contacts and payments
+    match /leads/{id}    { allow read, write: if isAdmin(); }
+    match /contacts/{id} { allow read, write: if isAdmin(); }
+    match /payments/{id} { allow read, write: if isAdmin(); }
+
+    // Everyone on staff sees the calendar; only admins change it
+    match /events/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // To-dos: admins assign; a team member sees and ticks only their own
+    match /tasks/{id} {
+      allow read: if isAdmin() || (isStaff() && resource.data.to == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isStaff() && resource.data.to == request.auth.uid && onlyChanges(['items']));
+    }
+
+    // Attendance: each person clocks themselves in and out once per day
+    match /attendance/{id} {
+      allow read: if isAdmin() || (isStaff() && resource.data.uid == request.auth.uid);
+      allow create: if isStaff() && request.resource.data.uid == request.auth.uid
+                    && id == request.auth.uid + '_' + request.resource.data.date;
+      allow update: if isAdmin() || (isStaff() && resource.data.uid == request.auth.uid && onlyChanges(['out']));
+      allow delete: if isAdmin();
+    }
+
+    // Team directory used when assigning to-dos
+    match /team/{id} {
+      allow read: if isAdmin() || (isStaff() && isMe(id));
+      allow write: if isStaff() && isMe(id);
+    }
+  }
+}
