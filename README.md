@@ -10,6 +10,16 @@ Runs on Firebase (database + logins, free tier) and GitHub Pages (hosting, free)
 | admin | Everything: calendar editing, leads, payments, team to-dos, everyone's attendance, exports |
 | team  | Calendar, their own to-dos, their own attendance (clock in/out) |
 
+## Team to-do page
+
+`team/` is a phone-friendly page that shows a team member only their own to-do lists
+(not finished, today, coming up) with big tick boxes. Same logins and data as the main app.
+Link: `https://<your-github-username>.github.io/<repo-name>/team/`
+
+Admins assign to-dos in the main app (Team to-do tab); after assigning, a
+**Send on WhatsApp** button sends the checklist and this link to the teammate.
+A new staff member appears in the admin's teammate list after their first sign-in.
+
 ## One-time setup (about 20 minutes)
 
 ### 1. Create the Firebase project

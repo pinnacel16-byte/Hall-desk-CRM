@@ -250,8 +250,13 @@ const A={
  addtask:async()=>{
   const to=v('t_to'),m=S.team.find(z=>z.id==to),items=$('#t_items').value.split('\n').map(s=>s.trim()).filter(Boolean).map(t=>({t,d:false}));
   if(!to||!v('t_title')||!items.length)return toast('Pick a teammate, title and at least one item');
-  const date=v('t_date');await db.collection('tasks').add({to,toName:m.name,date,ym:date.slice(0,7),title:v('t_title'),items});
-  toast(date.slice(0,7)==ymd(cur).slice(0,7)?'Assigned':'Assigned for '+fd(date));
+  const date=v('t_date'),title=v('t_title');await db.collection('tasks').add({to,toName:m.name,date,ym:date.slice(0,7),title,items});
+  ['t_title','t_items'].forEach(k=>$('#'+k).value='');
+  // offer to send it to the teammate on WhatsApp, with a link to their to-do page
+  const link=new URL('team/',location.href).href,first=m.name.split(' ')[0];
+  const msg=`Hi ${first}, your to-do for ${fd(date)}:\n*${title}*\n${items.map(i=>'• '+i.t).join('\n')}\n\nTick them off here: ${link}`;
+  modal(`<h2>Assigned to ${e(m.name)} ✓</h2><p class="mute">It's already on their to-do page${date.slice(0,7)==ymd(cur).slice(0,7)?'':' (for '+e(fd(date))+')'}. Want to send it on WhatsApp too?</p>
+  <div class="row"><a class="b" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}" data-a="close">Send on WhatsApp</a><button class="b alt" data-a="close">Done</button></div>`);
  },
  deltask:(id,b)=>sure(b,()=>db.doc('tasks/'+id).delete()),
  in:()=>db.doc('attendance/'+uid+'_'+today()).set({uid,name:uname,date:today(),ym:today().slice(0,7),in:Date.now()}),
