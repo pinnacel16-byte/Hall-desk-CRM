@@ -3,9 +3,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hall Desk</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
 <style>
 :root{--bg:#f1f4f3;--card:#fff;--ink:#16201f;--mute:#5d6b69;--line:#d6dfdc;--acc:#14645f;--gold:#e0a526;--red:#c62828;--redbg:#fde4e2;--grn:#1b7a3d;--grnbg:#dff3e6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -300,10 +297,9 @@ Object.assign(A,{
 });
 document.addEventListener('keydown',ev=>{if(ev.key=='Enter'&&ev.target.id=='li_pass')A.login()});
 
-/* ---------- boot ---------- */
-(()=>{
- if(!window.FIREBASE_CONFIG||!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey.startsWith('PASTE')){$('#view').innerHTML='<p>Setup not finished: add your Firebase settings to <b>config.js</b> (see README).</p>';return}
- firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();db=firebase.firestore();
+/* ---------- boot (called by the module script below with auth + db) ---------- */
+function boot(a,d){
+ auth=a;db=d;
  auth.onAuthStateChanged(async u=>{
   if(!u)return showLogin();
   // staff/<email> lists who may use the app and their role ("admin" or "team")
@@ -324,5 +320,22 @@ document.addEventListener('keydown',ev=>{if(ev.key=='Enter'&&ev.target.id=='li_p
   }
   render();
  });
-})();
+}
+</script>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,sendPasswordResetEmail,signOut} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {getFirestore,collection,doc,getDoc,setDoc,updateDoc,deleteDoc,addDoc,onSnapshot,query,where} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+const C=window.FIREBASE_CONFIG;
+if(!C||!C.apiKey||C.apiKey.startsWith('PASTE'))document.getElementById('view').innerHTML='<p>Setup not finished: add your Firebase settings to <b>config.js</b> (see README).</p>';
+else{
+ const app=initializeApp(C),a=getAuth(app),fs=getFirestore(app,window.FIRESTORE_DATABASE||'(default)');
+ if(window.USE_EMULATORS)await window.USE_EMULATORS(a,fs); // local testing only
+ // small wrapper so the app code can keep its db.collection(...).doc(...) style
+ const D=r=>({id:r.id,set:x=>setDoc(r,x),update:x=>updateDoc(r,x),delete:()=>deleteDoc(r),get:async()=>{const s=await getDoc(r);return{exists:s.exists(),data:()=>s.data()}}});
+ const Q=q=>({where:(f,o,v)=>Q(query(q,where(f,o,v))),onSnapshot:(next,err)=>onSnapshot(q,next,err)});
+ const db={collection:p=>{const c=collection(fs,p);return{...Q(c),doc:id=>D(id?doc(c,id):doc(c)),add:x=>addDoc(c,x).then(D)}},doc:p=>D(doc(fs,p))};
+ const auth={onAuthStateChanged:f=>onAuthStateChanged(a,f),signInWithEmailAndPassword:(e,p)=>signInWithEmailAndPassword(a,e,p),sendPasswordResetEmail:e=>sendPasswordResetEmail(a,e),signOut:()=>signOut(a)};
+ boot(auth,db);
+}
 </script></body></html>

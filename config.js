@@ -9,3 +9,5 @@ window.FIREBASE_CONFIG = {
   appId: "1:794016287093:web:db65ba3a5b8c32b670ab3c",
   measurementId: "G-T0B8SVBP31"
 };
+// Name of the Firestore database (shown in the database picker in the Firebase console)
+window.FIRESTORE_DATABASE = "default";
