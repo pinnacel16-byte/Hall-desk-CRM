@@ -157,12 +157,14 @@ function vAtt(){
  const mk=ymd(cur).slice(0,7),rows=S.att.filter(a=>a.date.startsWith(mk));
  const hrs=a=>a.out?((a.out-a.in)/36e5):0;
  let h=monthBar();
- if(!admin&&mk==today().slice(0,7)){
+ if(mk==today().slice(0,7)){
   const t=S.att.find(a=>a.id==uid+'_'+today());
   h+=`<div class="card row"><div><h3>Today</h3><span class="mute">${t?`In ${ft(t.in)} · Out ${ft(t.out)}`:'Not clocked in'}</span></div>
   ${!t?'<button class="b" data-a="in">Clock in</button>':!t.out?'<button class="b" data-a="out">Clock out</button>':'<span class="tag g">Day complete</span>'}</div>`;
  }
- const people=admin?S.team:[{id:uid,name:uname}];
+ // admins see themselves first, then the team, plus anyone else who clocked in this month (e.g. other admins)
+ const people=admin?[{id:uid,name:uname+' (you)'},...S.team.filter(p=>p.id!=uid)]:[{id:uid,name:uname}];
+ if(admin)rows.forEach(a=>{if(!people.some(p=>p.id==a.uid))people.push({id:a.uid,name:a.name||'Staff'})});
  people.forEach(p=>{
   const r=rows.filter(a=>a.uid==p.id).sort((a,b)=>a.date>b.date?1:-1),tot=r.reduce((s,a)=>s+hrs(a),0);
   h+=`<div class="card"><div class="row"><h3>${e(p.name)}</h3><span class="mute">${r.length} days present · ${tot.toFixed(1)} h</span></div>
