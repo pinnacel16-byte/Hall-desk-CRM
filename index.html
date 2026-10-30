@@ -79,6 +79,12 @@ function closeM(){$('#modal').classList.remove('on');$('#mbox').innerHTML=''}
 const myTasks=()=>S.tasks.filter(t=>admin||t.to===uid);
 const tally=k=>{let a=0,d=0;myTasks().filter(t=>t.date===k).forEach(t=>t.items.forEach(i=>{a++;if(i.d)d++}));return{a,d}};
 const payInfo=id=>{const p=S.pay[id]||{total:0,paid:0};const bal=p.total-p.paid;return{...p,bal,st:p.total&&bal<=0?'Paid':p.paid>0?'Partial':'Unpaid'}};
+// money: ₹1,50,000 style, plus a plain-words hint (1.5 lakh)
+const num=x=>+String(x??'').replace(/[^\d]/g,'')||0;
+const inr=n=>'₹'+num(n).toLocaleString('en-IN');
+const amtWords=n=>{n=num(n);const f=(x,u)=>(Math.round(x*100)/100).toLocaleString('en-IN')+' '+u;
+ return n>=1e7?f(n/1e7,'crore'):n>=1e5?f(n/1e5,'lakh'):n>=1e3?f(n/1e3,'thousand'):n?n+' rupees':''};
+const money=(id,val,extra='')=>`<input id="${id}" type="text" inputmode="numeric" data-money value="${num(val)?num(val).toLocaleString('en-IN'):''}" ${extra}><div class="mute" id="${id}_w">${amtWords(val)}</div>`;
 const stTag=s=>`<span class="tag ${s=='Paid'?'g':s=='Partial'?'y':'r'}">${s}</span>`;
 const booked=k=>S.ev.filter(x=>x.date==k).length;
 const isOpen=l=>!['Won','Lost'].includes(l.status);
@@ -113,7 +119,7 @@ function evCard(x){
  const ct=S.ct[x.id]||{},p=payInfo(x.id);
  return `<div class="card"><div class="row"><h3>${e(x.event)}</h3><span class="tag">${e(x.hall)}</span></div>
  <div class="mute">${e(x.from)}${x.to?' – '+e(x.to):''} · Host: <b>${e(x.host)}</b> · ${x.guests} guests${x.res?' · '+e(x.res):''}</div>
- ${admin?`<div class="mute">Contact: ${e(ct.phone||'–')} ${e(ct.email||'')} · Payment: ${stTag(p.st)} ₹${p.paid}/₹${p.total}</div>`:''}
+ ${admin?`<div class="mute">Contact: ${e(ct.phone||'–')} ${e(ct.email||'')} · Payment: ${stTag(p.st)} ${inr(p.paid)} / ${inr(p.total)}</div>`:''}
  <label>Facility notes</label><pre>${e(x.fac||'–')}</pre>
  ${admin?`<div class="row"><button class="b sm" data-a="editev" data-i="${x.id}">Edit</button><button class="b dng sm" data-a="delev" data-i="${x.id}">Delete</button></div>`:''}</div>`;
 }
@@ -132,7 +138,7 @@ function evForm(k,id,pre={}){
  modal(`<h2>${id?'Edit':'New'} function</h2><div class="f">${i('event','Event','' + (x.event||''))}
  <div><label>Hall</label><select id="f_hall">${HALLS.map(h=>`<option ${h==x.hall?'selected':''}>${h}</option>`).join('')}</select></div>
  ${i('host','Host name',x.host)}${i('guests','Guest count',x.guests,'number')}${i('date','Date',x.date,'date')}${i('from','Start time',x.from,'time')}${i('to','End time',x.to,'time')}${i('res','Residence',x.res)}
- ${i('phone','Contact phone',c.phone)}${i('email','Contact email',c.email)}${i('total','Total amount ₹',p.total||'','number')}${i('paid','Paid so far ₹',p.paid||'','number')}
+ ${i('phone','Contact phone',c.phone)}${i('email','Contact email',c.email)}<div><label>Total amount ₹</label>${money('f_total',p.total)}</div><div><label>Paid so far ₹</label>${money('f_paid',p.paid)}</div>
  <div class="wide"><label>Facility notes · <span id="wc">${words(x.fac||'')}</span> words (room for 500+)</label><textarea id="f_fac" rows="12" maxlength="12000">${e(x.fac)}</textarea></div></div>
  <div class="row"><button class="b" data-a="saveev" data-i="${id||''}" data-l="${e(pre.lead||'')}">Save function</button><button class="b alt" data-a="close">Cancel</button></div>`);
 }
@@ -190,7 +196,7 @@ function leadList(){
 function clashTag(k){const n=booked(k);return n>=3?'<span class="tag r">Date full (3/3)</span>':n?`<span class="tag y">${n}/3 booked that day</span>`:'<span class="tag g">Date free</span>'}
 function leadCard(l){
  const t=today(),o=isOpen(l),late=o&&l.next&&l.next<t,dueT=o&&l.next==t;
- const meta=[e(l.type||'Event'),l.date?'wants '+fd(l.date):'date TBD',l.guests?l.guests+' guests':'',l.budget?'budget ₹'+l.budget:'',e(l.hall||''),l.source?'via '+e(l.source):''].filter(Boolean).join(' · ');
+ const meta=[e(l.type||'Event'),l.date?'wants '+fd(l.date):'date TBD',l.guests?l.guests+' guests':'',l.budget?'budget '+inr(l.budget)+' ('+amtWords(l.budget)+')':'',e(l.hall||''),l.source?'via '+e(l.source):''].filter(Boolean).join(' · ');
  const log=(l.log||[]).slice().reverse();
  return `<div class="card"><div class="row"><h3>${e(l.name)} <span class="mute">${e(l.phone)}${l.email?' · '+e(l.email):''}</span></h3>
  <span>${late?'<span class="tag r">Follow-up overdue</span> ':dueT?'<span class="tag y">Follow up today</span> ':''}${o&&l.date?clashTag(l.date):''}</span></div>
@@ -204,10 +210,14 @@ function leadCard(l){
 }
 function leadForm(id){
  const l=S.leads.find(z=>z.id==id)||{next:today(),type:TYPES[0],source:SRC[0],hall:''};
+ // a function typed under "Other" is saved as its own name, e.g. "Mehendi"
+ const custom=l.type&&!TYPES.includes(l.type);
  const i=(f,lb,val,t='text')=>`<div><label>${lb}</label><input id="l_${f}" type="${t}" value="${e(val??'')}"></div>`;
  const s=(f,lb,opts,val)=>`<div><label>${lb}</label><select id="l_${f}">${opts.map(o=>`<option value="${e(o)}" ${o==(val||'')?'selected':''}>${e(o||'No preference')}</option>`).join('')}</select></div>`;
  modal(`<h2>${id?'Edit':'New'} lead</h2><div class="f">${i('name','Name *',l.name)}${i('phone','Phone',l.phone,'tel')}${i('email','Email',l.email,'email')}
- ${s('type','Event type',TYPES,l.type)}${i('date','Wanted date',l.date,'date')}${i('guests','Guest count',l.guests||'','number')}${i('budget','Budget ₹',l.budget||'','number')}
+ ${s('type','Event type',TYPES,custom?'Other':l.type)}
+ <div id="l_otherbox" ${custom||l.type=='Other'?'':'hidden'}><label>Which function?</label><input id="l_other" value="${e(custom?l.type:'')}" placeholder="e.g. Mehendi, Sangeet, Haldi"></div>
+ ${i('date','Wanted date',l.date,'date')}${i('guests','Guest count',l.guests||'','number')}<div><label>Budget ₹</label>${money('l_budget',l.budget,'placeholder="e.g. 1,50,000"')}</div>
  ${s('hall','Preferred hall',['',...HALLS],l.hall)}${s('source','How they found us',SRC,l.source)}${i('next','Next follow-up',l.next,'date')}
  <div class="wide" id="l_clash"></div>
  <div class="wide"><label>Notes</label><textarea id="l_notes" rows="3">${e(l.notes)}</textarea></div></div>
@@ -227,7 +237,7 @@ function vPay(){
  const ev=[...S.ev].sort((a,b)=>a.date<b.date?1:-1);
  return `<div class="row" style="margin-bottom:10px"><span class="mute">Bookings from ${fd(cutoff)} onward. Older ones are in the export.</span><button class="b alt sm" data-a="exportbook">Export bookings (Excel/CSV)</button></div><div class="card"><table class="tbl"><tr><th>Event</th><th>Total ₹</th><th>Paid ₹</th><th>Balance</th><th>Status</th><th></th></tr>`+
  ev.map(x=>{const p=payInfo(x.id);return `<tr><td>${e(x.event)}<div class="mute">${e(x.host)} · ${fd(x.date)}</div></td>
- <td><input id="p_t_${x.id}" type="number" value="${p.total}"></td><td><input id="p_p_${x.id}" type="number" value="${p.paid}"></td><td>₹${p.bal}</td><td>${stTag(p.st)}</td>
+ <td>${money('p_t_'+x.id,p.total)}</td><td>${money('p_p_'+x.id,p.paid)}</td><td>${p.bal<0?'-':''}${inr(Math.abs(p.bal))}</td><td>${stTag(p.st)}</td>
  <td><button class="b sm" data-a="savepay" data-i="${x.id}">Save</button></td></tr>`}).join('')+`</table>${ev.length?'':'<p class="mute">Add a function to track its payments.</p>'}</div>`;
 }
 
@@ -245,7 +255,7 @@ const A={
   if(S.ev.filter(x=>x.date==d.date&&x.id!=id).length>=3)return toast('That day already has 3 functions');
   const r=id?db.collection('events').doc(id):db.collection('events').doc();
   try{await r.set(d);await db.doc('contacts/'+r.id).set({phone:v('f_phone'),email:v('f_email')});
-  await db.doc('payments/'+r.id).set({total:+v('f_total')||0,paid:+v('f_paid')||0});
+  await db.doc('payments/'+r.id).set({total:num(v('f_total')),paid:num(v('f_paid'))});
   if(b.dataset.l)await db.doc('leads/'+b.dataset.l).update({status:'Won'});closeM();toast('Saved')}catch(x){toast('Could not save')}
  },
  delev:(id,b)=>sure(b,async()=>{await db.doc('events/'+id).delete();await db.doc('contacts/'+id).delete();await db.doc('payments/'+id).delete();closeM()}),
@@ -265,7 +275,7 @@ const A={
  out:()=>db.doc('attendance/'+uid+'_'+today()).update({out:Date.now()}),
  newlead:()=>leadForm(),editlead:id=>leadForm(id),lfilter:k=>{lf=k;render()},
  savelead:async id=>{
-  const d={name:v('l_name'),phone:v('l_phone'),email:v('l_email'),type:v('l_type'),date:v('l_date'),guests:+v('l_guests')||0,budget:+v('l_budget')||0,hall:v('l_hall'),source:v('l_source'),next:v('l_next'),notes:$('#l_notes').value};
+  const d={name:v('l_name'),phone:v('l_phone'),email:v('l_email'),type:v('l_type')=='Other'?(v('l_other')||'Other'):v('l_type'),date:v('l_date'),guests:+v('l_guests')||0,budget:num(v('l_budget')),hall:v('l_hall'),source:v('l_source'),next:v('l_next'),notes:$('#l_notes').value};
   if(!d.name)return toast('Add a name');
   try{if(id)await db.doc('leads/'+id).update(d);else await db.collection('leads').add({...d,status:'New',by:uid,byName:uname,at:Date.now(),log:[]});closeM();toast('Lead saved')}catch(x){toast('Could not save')}
  },
@@ -285,10 +295,12 @@ const A={
   saveFile('hall-desk-bookings-'+today()+'.csv',csv([['Date','Start','End','Event','Hall','Host','Guests','Residence','Phone','Email','Total','Paid','Balance','Payment status','Facility notes'],
   ...all.sort((a,b)=>a.date>b.date?1:-1).map(x=>{const c=S.ct[x.id]||{},p=payInfo(x.id);return[x.date,x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,p.total,p.paid,p.bal,p.st,x.fac]})]))},
  dellead:(id,b)=>sure(b,()=>db.doc('leads/'+id).delete()),
- savepay:async id=>{await db.doc('payments/'+id).set({total:+v('p_t_'+id)||0,paid:+v('p_p_'+id)||0});toast('Payment updated')}
+ savepay:async id=>{await db.doc('payments/'+id).set({total:num(v('p_t_'+id)),paid:num(v('p_p_'+id))});toast('Payment updated')}
 };
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(b&&A[b.dataset.a])A[b.dataset.a](b.dataset.i,b)});
 document.addEventListener('input',ev=>{const id=ev.target.id;
+ if(ev.target.dataset.money!=null){const t=ev.target,n=num(t.value);t.value=n?n.toLocaleString('en-IN'):'';const w=document.getElementById(id+'_w');if(w)w.textContent=amtWords(n)}
+ if(id=='l_type'){const b=$('#l_otherbox');b.hidden=ev.target.value!='Other';if(!b.hidden)$('#l_other').focus()}
  if(id=='f_fac')$('#wc').textContent=words(ev.target.value);
  if(id=='l_date')clashMsg();
  if(id=='lq'){lq=ev.target.value;$('#llist').innerHTML=leadList()}
