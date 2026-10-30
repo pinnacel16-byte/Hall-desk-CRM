@@ -48,6 +48,12 @@ label{font-size:13px;color:var(--mute);display:block}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .note{border-left:3px solid var(--gold);padding:2px 0 2px 8px;margin:6px 0}
 .addn{display:flex;gap:6px}.addn input{flex:1}
+.duerow{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0 10px 10px;border-top:1px solid var(--line);border-left:4px solid var(--line)}
+.duerow.due,.duerow.nototal{border-left-color:var(--red)}.duerow.soon{border-left-color:var(--gold)}
+.dueact{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.duerow>.tag{align-self:center}a.b{text-decoration:none;display:inline-block}.dueact .addn input{width:120px}
+.card.warn{border-color:var(--gold);background:#fff8e6;align-items:center}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .card.warn{background:#3a2f12}}
 .dayrow{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--card)}
 .fixed{padding:8px;border:1px dashed var(--line);border-radius:8px;color:var(--mute)}
 .dd{display:flex;gap:6px;align-items:center}.dd .ddt{flex:1;min-width:0}
@@ -135,7 +141,7 @@ const dv=x=>x.tagName=='SELECT'?([...x.options].find(o=>o.defaultSelected)||x.op
 /* ---------- views ---------- */
 function render(){
  if(!ready)return;
- const tabs=admin?[['cal','Calendar'],['tasks','Team to-do'],['att','Attendance'],['leads','Leads'],['pay','Payments']]:[['cal','Calendar'],['tasks','My to-do'],['att','My attendance']];
+ const tabs=admin?[['cal','Calendar'],['tasks','Team to-do'],['att','Attendance'],['leads','Leads'],['pay','Payments'+(dueNow()?` (${dueNow()})`:'')]]:[['cal','Calendar'],['tasks','My to-do'],['att','My attendance']];
  $('#nav').innerHTML=tabs.map(([k,l])=>`<button class="${tab==k?'on':''}" data-a="tab" data-i="${k}">${l}</button>`).join('');
  $('#role').textContent=admin?'Admin':'Team';
  // keep what someone is typing when a teammate's change re-renders the view
@@ -149,6 +155,10 @@ function render(){
  const f=fid&&document.getElementById(fid);if(f){f.focus();try{if(sel)f.setSelectionRange(...sel)}catch(x){}}
 }
 function vCal(){
+ const due=admin?dueNow():0;
+ return (due?`<div class="card warn row"><span>💰 <b>${due} payment${due>1?'s':''} to collect</b> under your 50% / 100% rule.</span><button class="b sm" data-a="tab" data-i="pay">View</button></div>`:'')+calGrid();
+}
+function calGrid(){
  const y=cur.getFullYear(),m=cur.getMonth(),first=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate();
  let h=`<div class="bar"><button class="b alt sm" data-a="prev">‹ Prev</button><h2>${cur.toLocaleString('en-IN',{month:'long',year:'numeric'})}</h2><button class="b alt sm" data-a="next">Next ›</button></div><div class="grid">`+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<b class="dow">${d}</b>`).join('');
  for(let i=0;i<first;i++)h+='<i></i>';
@@ -300,9 +310,45 @@ function saveFile(name,text){
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+text],{type:'text/csv'}));a.download=name;a.click();
  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+// Collection rule: 50% by 15 days before a booking's first day, 100% by 5 days before.
+const RULES=[[15,.5,'50% advance'],[5,1,'Full payment']];
+const daysTo=k=>Math.round((new Date(k+'T00:00')-new Date(today()+'T00:00'))/864e5);
+// bookings that need money collected now (or within a week), most urgent first
+function dues(){
+ const t=today(),out=[];
+ bookings().forEach(({g,ds})=>{
+  const start=ds[0].date,end=ds[ds.length-1].date,p=payInfo(g),total=num(p.total),paid=num(p.paid);
+  if(!total){if(end>=t&&daysTo(start)<=15)out.push({g,ds,state:'nototal',by:addDay(start,-15),paid,total});return}
+  if(paid>=total)return;
+  let need=0,label='',by='';
+  for(const [d,f,l] of RULES){const k=addDay(start,-d);if(k<=t){need=Math.ceil(total*f);label=l;by=k}}
+  if(paid<need)return out.push({g,ds,state:'due',amt:need-paid,label,by,paid,total});
+  for(const [d,f,l] of RULES){const k=addDay(start,-d),amt=Math.ceil(total*f)-paid;if(k>t&&amt>0&&daysTo(k)<=7)return out.push({g,ds,state:'soon',amt,label:l,by:k,paid,total})}
+ });
+ const rank={due:0,nototal:1,soon:2};
+ return out.sort((a,b)=>rank[a.state]-rank[b.state]||(a.by>b.by?1:-1));
+}
+const dueNow=()=>dues().filter(d=>d.state!='soon').length;
+function payReminder(d){
+ const ct=S.ct[d.g]||{},ph=String(ct.phone||'').replace(/\D/g,''),num_=ph.length==10?'91'+ph:ph,x=d.ds[0];
+ const when=d.ds.length>1?`from ${dmy(d.ds[0].date)} to ${dmy(d.ds[d.ds.length-1].date)}`:`on ${dmy(x.date)}`;
+ const msg=`Namaste ${x.host} ji, this is a reminder from the hall about your booking ${when}.\n\n${inr(d.amt)} is due ${daysTo(d.by)<0?'(it was due on '+dmy(d.by)+')':'by '+dmy(d.by)}, ${d.label=='Full payment'?'to complete the full payment':'as the 50% advance'}.\nTotal: ${inr(d.total)} · Paid so far: ${inr(d.paid)} · Balance: ${inr(d.total-d.paid)}\n\nThank you!`;
+ return `https://wa.me/${num_}?text=${encodeURIComponent(msg)}`;
+}
+function vDues(){
+ const L=dues();
+ if(!L.length)return `<div class="card"><h3>Payments to collect</h3><p class="mute">Nothing due right now. Rule: 50% by 15 days before the function, 100% by 5 days before.</p></div>`;
+ const whenTxt=d=>{const n=daysTo(d.by);return n<0?`due since ${dmy(d.by)} (${-n} day${n<-1?'s':''} late)`:n==0?'due today':`due by ${dmy(d.by)} (in ${n} day${n>1?'s':''})`};
+ return `<div class="card"><h3>Payments to collect</h3><p class="mute">Rule: 50% by 15 days before the function, 100% by 5 days before.</p>`+L.map(d=>{const x=d.ds[0],names=[...new Set(d.ds.map(z=>z.event))].map(e).join(', ');
+  return `<div class="duerow ${d.state}"><div><b>${e(x.host)}</b> · ${names} · ${span(d.ds)}
+  <div class="mute">${d.state=='nototal'?'Total amount not set yet. Add it in the table below so reminders can work.':`${d.label} ${whenTxt(d)} · paid ${inr(d.paid)} of ${inr(d.total)}`}</div></div>
+  ${d.state=='nototal'?'<span class="tag r">Set total</span>':`<div class="dueact"><span class="tag ${d.state=='due'?'r':'y'}">Collect ${inr(d.amt)}</span>
+  <a class="b sm" target="_blank" rel="noopener" href="${payReminder(d)}">WhatsApp reminder</a>
+  <span class="addn"><input id="rp_${d.g}" type="text" inputmode="numeric" data-money placeholder="Received ₹"><button class="b alt sm" data-a="recpay" data-i="${d.g}">Add</button></span></div>`}</div>`}).join('')+`</div>`;
+}
 function vPay(){
  const bs=bookings().sort((a,b)=>a.ds[0].date<b.ds[0].date?1:-1);
- return `<div class="row" style="margin-bottom:10px"><span class="mute">Bookings from ${fd(cutoff)} onward. Older ones are in the export.</span><button class="b alt sm" data-a="exportbook">Export bookings (Excel/CSV)</button></div><div class="card"><table class="tbl"><tr><th>Booking</th><th>Total ₹</th><th>Paid ₹</th><th>Balance</th><th>Status</th><th></th></tr>`+
+ return vDues()+`<div class="row" style="margin-bottom:10px"><span class="mute">Bookings from ${fd(cutoff)} onward. Older ones are in the export.</span><button class="b alt sm" data-a="exportbook">Export bookings (Excel/CSV)</button></div><div class="card"><table class="tbl"><tr><th>Booking</th><th>Total ₹</th><th>Paid ₹</th><th>Balance</th><th>Status</th><th></th></tr>`+
  bs.map(({g,ds})=>{const p=payInfo(g),x=ds[0];return `<tr><td>${[...new Set(ds.map(d=>d.event))].map(e).join(', ')}<div class="mute">${e(x.host)} · ${ds.length>1?ds.length+' days · ':''}${span(ds)}</div></td>
  <td>${money('p_t_'+g,p.total)}</td><td>${money('p_p_'+g,p.paid)}</td><td>${p.bal<0?'-':''}${inr(Math.abs(p.bal))}</td><td>${stTag(p.st)}</td>
  <td><button class="b sm" data-a="savepay" data-i="${g}">Save</button></td></tr>`}).join('')+`</table>${bs.length?'':'<p class="mute">Add a booking to track its payments.</p>'}</div>`;
@@ -406,6 +452,10 @@ const A={
   ...all.sort((a,b)=>a.date>b.date?1:-1).map(x=>{const g=gk(x),ds=grp[g],n=ds.indexOf(x),c=S.ct[g]||{},p=payInfo(g),first=n==0;
    return[dmy(x.date),ds.length>1?(n+1)+' of '+ds.length:'',x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,first?p.total:'',first?p.paid:'',first?p.bal:'',first?p.st:'',x.fac]})]))},
  dellead:(id,b)=>sure(b,()=>db.doc('leads/'+id).delete()),
+ recpay:async g=>{
+  const amt=num(v('rp_'+g));if(!amt)return toast('Type the amount received');
+  const p=payInfo(g);try{await db.doc('payments/'+g).set({total:num(p.total),paid:num(p.paid)+amt});toast(inr(amt)+' added. Paid now '+inr(num(p.paid)+amt))}catch(x){toast('Could not save')}
+ },
  savepay:async id=>{await db.doc('payments/'+id).set({total:num(v('p_t_'+id)),paid:num(v('p_p_'+id))});toast('Payment updated')}
 };
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(b&&A[b.dataset.a])A[b.dataset.a](b.dataset.i,b)});
