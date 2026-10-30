@@ -113,6 +113,7 @@ const amtWords=n=>{n=num(n);const f=(x,u)=>(Math.round(x*100)/100).toLocaleStrin
 const money=(id,val,extra='')=>`<input id="${id}" type="text" inputmode="numeric" data-money value="${num(val)?num(val).toLocaleString('en-IN'):''}" ${extra}><div class="mute" id="${id}_w">${amtWords(val)}</div>`;
 const stTag=s=>`<span class="tag ${s=='Paid'?'g':s=='Partial'?'y':'r'}">${s}</span>`;
 const booked=k=>S.ev.filter(x=>x.date==k).length;
+const enqOf=l=>l.enq||(l.at?ymd(new Date(l.at)):'');
 const isOpen=l=>!['Won','Lost'].includes(l.status);
 const dv=x=>x.tagName=='SELECT'?([...x.options].find(o=>o.defaultSelected)||x.options[0]||{}).value:x.defaultValue;
 
@@ -224,7 +225,7 @@ function leadList(){
 function clashTag(k){const n=booked(k);return n>=3?'<span class="tag r">Date full (3/3)</span>':n?`<span class="tag y">${n}/3 booked that day</span>`:'<span class="tag g">Date free</span>'}
 function leadCard(l){
  const t=today(),o=isOpen(l),late=o&&l.next&&l.next<t,dueT=o&&l.next==t;
- const meta=[e(l.type||'Event'),l.date?'wants '+fd(l.date):'date TBD',l.guests?l.guests+' guests':'',l.budget?'budget '+inr(l.budget)+' ('+amtWords(l.budget)+')':'',e(l.hall||''),l.source?'via '+e(l.source):''].filter(Boolean).join(' · ');
+ const meta=[enqOf(l)?'enquired '+dmy(enqOf(l)):'',e(l.type||'Event'),l.date?'wants '+fd(l.date):'date TBD',l.guests?l.guests+' guests':'',l.budget?'budget '+inr(l.budget)+' ('+amtWords(l.budget)+')':'',e(l.hall||''),l.source?'via '+e(l.source):''].filter(Boolean).join(' · ');
  const log=(l.log||[]).slice().reverse();
  return `<div class="card"><div class="row"><h3>${e(l.name)} <span class="mute">${e(l.phone)}${l.email?' · '+e(l.email):''}</span></h3>
  <span>${late?'<span class="tag r">Follow-up overdue</span> ':dueT?'<span class="tag y">Follow up today</span> ':''}${o&&l.date?clashTag(l.date):''}</span></div>
@@ -237,13 +238,13 @@ function leadCard(l){
  <span class="row"><button class="b alt sm" data-a="editlead" data-i="${l.id}">Edit</button>${l.status!='Lost'?`<button class="b sm" data-a="booklead" data-i="${l.id}">Book function</button>`:''}<button class="b dng sm" data-a="dellead" data-i="${l.id}">Delete</button></span></div></div>`;
 }
 function leadForm(id){
- const l=S.leads.find(z=>z.id==id)||{next:today(),type:TYPES[0],source:SRC[0],hall:''};
+ const l=S.leads.find(z=>z.id==id)||{enq:today(),next:today(),type:TYPES[0],source:SRC[0],hall:''};
  // a function typed under "Other" is saved as its own name, e.g. "Mehendi"
  const custom=l.type&&!TYPES.includes(l.type);
  const i=(f,lb,val,t='text')=>`<div><label>${lb}</label><input id="l_${f}" type="${t}" value="${e(val??'')}"></div>`;
  const s=(f,lb,opts,val)=>`<div><label>${lb}</label><select id="l_${f}">${opts.map(o=>`<option value="${e(o)}" ${o==(val||'')?'selected':''}>${e(o||'No preference')}</option>`).join('')}</select></div>`;
  modal(`<h2>${id?'Edit':'New'} lead</h2><div class="f">${i('name','Name *',l.name)}${i('phone','Phone',l.phone,'tel')}${i('email','Email',l.email,'email')}
- ${s('type','Event type',TYPES,custom?'Other':l.type)}
+ ${i('enq','Enquiry date',enqOf(l),'date')}${s('type','Event type',TYPES,custom?'Other':l.type)}
  <div id="l_otherbox" ${custom||l.type=='Other'?'':'hidden'}><label>Which function?</label><input id="l_other" value="${e(custom?l.type:'')}" placeholder="e.g. Mehendi, Sangeet, Haldi"></div>
  ${i('date','Wanted date',l.date,'date')}${i('guests','Guest count',l.guests||'','number')}<div><label>Budget ₹</label>${money('l_budget',l.budget,'placeholder="e.g. 1,50,000"')}</div>
  ${s('hall','Preferred hall',['',...HALLS],l.hall)}${s('source','How they found us',SRC,l.source)}${i('next','Next follow-up',l.next,'date')}
@@ -303,7 +304,7 @@ const A={
  out:()=>db.doc('attendance/'+uid+'_'+today()).update({out:Date.now()}),
  newlead:()=>leadForm(),editlead:id=>leadForm(id),lfilter:k=>{lf=k;render()},
  savelead:async id=>{
-  const d={name:v('l_name'),phone:v('l_phone'),email:v('l_email'),type:v('l_type')=='Other'?(v('l_other')||'Other'):v('l_type'),date:v('l_date'),guests:+v('l_guests')||0,budget:num(v('l_budget')),hall:v('l_hall'),source:v('l_source'),next:v('l_next'),notes:$('#l_notes').value};
+  const d={name:v('l_name'),enq:v('l_enq')||today(),phone:v('l_phone'),email:v('l_email'),type:v('l_type')=='Other'?(v('l_other')||'Other'):v('l_type'),date:v('l_date'),guests:+v('l_guests')||0,budget:num(v('l_budget')),hall:v('l_hall'),source:v('l_source'),next:v('l_next'),notes:$('#l_notes').value};
   if(!d.name)return toast('Add a name');
   try{if(id)await db.doc('leads/'+id).update(d);else await db.collection('leads').add({...d,status:'New',by:uid,byName:uname,at:Date.now(),log:[]});closeM();toast('Lead saved')}catch(x){toast('Could not save')}
  },
@@ -315,8 +316,8 @@ const A={
   const l=S.leads.find(z=>z.id==id);if(!l)return;if(l.date&&booked(l.date)>=3)return toast('That date already has 3 functions');
   evForm(l.date||today(),null,{event:l.type,host:l.name,guests:l.guests||'',hall:l.hall||HALLS[0],phone:l.phone,email:l.email,total:l.budget||'',lead:id});
  },
- exportleads:()=>saveFile('hall-desk-leads-'+today()+'.csv',csv([['Name','Phone','Email','Event type','Wanted date','Guests','Budget','Preferred hall','Source','Status','Next follow-up','Notes','Note history','Added by','Added on'],
-  ...S.leads.map(l=>[l.name,l.phone,l.email,l.type,dmy(l.date),l.guests||'',l.budget||'',l.hall,l.source,l.status,dmy(l.next),l.notes,(l.log||[]).map(n=>`${dmy(ymd(new Date(n.at)))} ${ft(n.at)} ${n.by}: ${n.t}`).join(' | '),l.byName,l.at?dmy(ymd(new Date(l.at))):''])])),
+ exportleads:()=>saveFile('hall-desk-leads-'+today()+'.csv',csv([['Name','Phone','Email','Enquiry date','Event type','Wanted date','Guests','Budget','Preferred hall','Source','Status','Next follow-up','Notes','Note history','Added by','Added on'],
+  ...S.leads.map(l=>[l.name,l.phone,l.email,dmy(enqOf(l)),l.type,dmy(l.date),l.guests||'',l.budget||'',l.hall,l.source,l.status,dmy(l.next),l.notes,(l.log||[]).map(n=>`${dmy(ymd(new Date(n.at)))} ${ft(n.at)} ${n.by}: ${n.t}`).join(' | '),l.byName,l.at?dmy(ymd(new Date(l.at))):''])])),
  exportbook:async()=>{
   // the screen only holds recent bookings, so fetch them all for the export
   let all;try{all=(await db.collection('events').get()).docs.map(x=>({id:x.id,...x.data()}))}catch(x){return toast('Could not load bookings')}
