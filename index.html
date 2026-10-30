@@ -46,6 +46,9 @@ label{font-size:13px;color:var(--mute);display:block}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .note{border-left:3px solid var(--gold);padding:2px 0 2px 8px;margin:6px 0}
 .addn{display:flex;gap:6px}.addn input{flex:1}
+.dd{display:flex;gap:6px;align-items:center}.dd .ddt{flex:1;min-width:0}
+.dd .cal{position:relative;flex:none;width:42px;height:38px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;background:var(--bg);cursor:pointer}
+.dd .cal input{position:absolute;inset:0;width:100%;height:100%;opacity:0;padding:0;border:0;cursor:pointer}
 .login{max-width:380px;margin:40px auto}.login input{margin-bottom:10px}
 #who{float:right;font-size:13px;color:var(--mute);margin-top:8px}#who button{margin-left:8px}
 @media(max-width:640px){.day{min-height:64px}.chip{font-size:9px}}
@@ -70,11 +73,34 @@ let db,auth,admin=false,uid='',uname='',tab='cal',cur=new Date(),ready=false,lf=
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=()=>ymd(new Date());
 const cutoff=ymd(new Date(new Date().getFullYear(),new Date().getMonth()-1,1));
-const fd=k=>new Date(k+'T00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+const dmy=k=>k?k.slice(8,10)+'/'+k.slice(5,7)+'/'+k.slice(0,4):'';
+const fd=k=>new Date(k+'T00:00').toLocaleDateString('en-IN',{weekday:'short'})+' '+dmy(k);
 const ft=t=>t?new Date(t).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'–';
 const words=t=>(t.trim().match(/\S+/g)||[]).length;
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
-function modal(h){$('#mbox').innerHTML=h;$('#modal').classList.add('on')}
+function modal(h){$('#mbox').innerHTML=h;dateFix($('#mbox'));$('#modal').classList.add('on')}
+// Date boxes always show dd/mm/yyyy (the browser's own date box follows its language, often mm/dd/yyyy).
+// The real date input stays underneath the 📅 button: it holds the value and opens the picker.
+const fire=n=>{n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}))};
+function dateFix(root){
+ root.querySelectorAll('input[type=date]:not([data-dd])').forEach(n=>{
+  n.dataset.dd=1;
+  const w=document.createElement('span'),t=document.createElement('input'),c=document.createElement('span');
+  w.className='dd';c.className='cal';c.textContent='📅';c.title='Pick a date';
+  t.type='text';t.className='ddt';t.inputMode='numeric';t.placeholder='dd/mm/yyyy';t.maxLength=10;t.value=dmy(n.value);if(n.id)t.id=n.id+'_dd';
+  n.before(w);w.append(t,c);c.append(n);
+  n.addEventListener('click',()=>{try{n.showPicker()}catch(x){}});
+  n.addEventListener('change',()=>{t.value=dmy(n.value)});
+  t.addEventListener('input',()=>{
+   const d=t.value.replace(/\D/g,'').slice(0,8);
+   t.value=d.length>4?d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4):d.length>2?d.slice(0,2)+'/'+d.slice(2):d;
+   const iso=d.length==8?d.slice(4)+'-'+d.slice(2,4)+'-'+d.slice(0,2):'';
+   if(iso&&ymd(new Date(iso+'T00:00'))==iso){if(n.value!=iso){n.value=iso;fire(n)}}
+   else if(!d&&n.value){n.value='';fire(n)}
+  });
+  t.addEventListener('blur',()=>{if(t.value&&t.value!=dmy(n.value)){toast('Date should be dd/mm/yyyy');t.value=dmy(n.value)}});
+ });
+}
 function closeM(){$('#modal').classList.remove('on');$('#mbox').innerHTML=''}
 const myTasks=()=>S.tasks.filter(t=>admin||t.to===uid);
 const tally=k=>{let a=0,d=0;myTasks().filter(t=>t.date===k).forEach(t=>t.items.forEach(i=>{a++;if(i.d)d++}));return{a,d}};
@@ -101,7 +127,9 @@ function render(){
  let sel=null;try{if(fid&&a.selectionStart!=null)sel=[a.selectionStart,a.selectionEnd]}catch(x){}
  $('#view').querySelectorAll('input[id],textarea[id],select[id]').forEach(x=>{if(x.value!==dv(x))keep[x.id]=x.value});
  $('#view').innerHTML={cal:vCal,tasks:vTasks,att:vAtt,leads:vLeads,pay:vPay}[tab]();
+ dateFix($('#view'));
  for(const k in keep){const x=document.getElementById(k);if(x)x.value=keep[k]}
+ $('#view').querySelectorAll('.dd').forEach(w=>{const t=w.querySelector('.ddt');if(!(t.id in keep))t.value=dmy(w.querySelector('input[type=date]').value)});
  const f=fid&&document.getElementById(fid);if(f){f.focus();try{if(sel)f.setSelectionRange(...sel)}catch(x){}}
 }
 function vCal(){
@@ -201,7 +229,7 @@ function leadCard(l){
  return `<div class="card"><div class="row"><h3>${e(l.name)} <span class="mute">${e(l.phone)}${l.email?' · '+e(l.email):''}</span></h3>
  <span>${late?'<span class="tag r">Follow-up overdue</span> ':dueT?'<span class="tag y">Follow up today</span> ':''}${o&&l.date?clashTag(l.date):''}</span></div>
  <div class="mute">${meta}</div>${l.notes?`<pre>${e(l.notes)}</pre>`:''}
- ${log.map(x=>`<div class="note"><b>${e(x.by)}</b> <span class="mute">${new Date(x.at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><pre>${e(x.t)}</pre></div>`).join('')}
+ ${log.map(x=>`<div class="note"><b>${e(x.by)}</b> <span class="mute">${dmy(ymd(new Date(x.at)))} ${ft(x.at)}</span><pre>${e(x.t)}</pre></div>`).join('')}
  <div class="f"><div><label>Status</label><select data-c="lstatus" data-i="${l.id}">${LS.map(s=>`<option ${s==l.status?'selected':''}>${s}</option>`).join('')}</select></div>
  <div><label>Next follow-up</label><input type="date" value="${l.next||''}" data-c="lnext" data-i="${l.id}"></div>
  <div class="wide addn"><input id="ln_${l.id}" placeholder="Add a note: call outcome, visit feedback…"><button class="b sm" data-a="addnote" data-i="${l.id}">Add note</button></div></div>
@@ -288,12 +316,12 @@ const A={
   evForm(l.date||today(),null,{event:l.type,host:l.name,guests:l.guests||'',hall:l.hall||HALLS[0],phone:l.phone,email:l.email,total:l.budget||'',lead:id});
  },
  exportleads:()=>saveFile('hall-desk-leads-'+today()+'.csv',csv([['Name','Phone','Email','Event type','Wanted date','Guests','Budget','Preferred hall','Source','Status','Next follow-up','Notes','Note history','Added by','Added on'],
-  ...S.leads.map(l=>[l.name,l.phone,l.email,l.type,l.date,l.guests||'',l.budget||'',l.hall,l.source,l.status,l.next,l.notes,(l.log||[]).map(n=>`${new Date(n.at).toLocaleString('en-IN')} ${n.by}: ${n.t}`).join(' | '),l.byName,l.at?ymd(new Date(l.at)):''])])),
+  ...S.leads.map(l=>[l.name,l.phone,l.email,l.type,dmy(l.date),l.guests||'',l.budget||'',l.hall,l.source,l.status,dmy(l.next),l.notes,(l.log||[]).map(n=>`${dmy(ymd(new Date(n.at)))} ${ft(n.at)} ${n.by}: ${n.t}`).join(' | '),l.byName,l.at?dmy(ymd(new Date(l.at))):''])])),
  exportbook:async()=>{
   // the screen only holds recent bookings, so fetch them all for the export
   let all;try{all=(await db.collection('events').get()).docs.map(x=>({id:x.id,...x.data()}))}catch(x){return toast('Could not load bookings')}
   saveFile('hall-desk-bookings-'+today()+'.csv',csv([['Date','Start','End','Event','Hall','Host','Guests','Residence','Phone','Email','Total','Paid','Balance','Payment status','Facility notes'],
-  ...all.sort((a,b)=>a.date>b.date?1:-1).map(x=>{const c=S.ct[x.id]||{},p=payInfo(x.id);return[x.date,x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,p.total,p.paid,p.bal,p.st,x.fac]})]))},
+  ...all.sort((a,b)=>a.date>b.date?1:-1).map(x=>{const c=S.ct[x.id]||{},p=payInfo(x.id);return[dmy(x.date),x.from,x.to,x.event,x.hall,x.host,x.guests,x.res,c.phone,c.email,p.total,p.paid,p.bal,p.st,x.fac]})]))},
  dellead:(id,b)=>sure(b,()=>db.doc('leads/'+id).delete()),
  savepay:async id=>{await db.doc('payments/'+id).set({total:num(v('p_t_'+id)),paid:num(v('p_p_'+id))});toast('Payment updated')}
 };
