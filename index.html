@@ -5,9 +5,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="config.js"></script>
 <style>
-:root{--bg:#f1f4f3;--card:#fff;--ink:#16201f;--mute:#5d6b69;--line:#d6dfdc;--acc:#14645f;--gold:#e0a526;--red:#c62828;--redbg:#fde4e2;--grn:#1b7a3d;--grnbg:#dff3e6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1716;--card:#18231f;--ink:#e8efed;--mute:#9bb0ab;--line:#2c3d38;--acc:#4fb8ae;--redbg:#4a1f1d;--grnbg:#173a26;--red:#ff8a80;--grn:#6fd48f}}
-:root[data-theme="dark"]{--bg:#0f1716;--card:#18231f;--ink:#e8efed;--mute:#9bb0ab;--line:#2c3d38;--acc:#4fb8ae;--redbg:#4a1f1d;--grnbg:#173a26;--red:#ff8a80;--grn:#6fd48f}
+:root{--bg:#f1f4f3;--card:#fff;--ink:#16201f;--mute:#5d6b69;--line:#d6dfdc;--acc:#14645f;--gold:#e0a526;--red:#c62828;--redbg:#fde4e2;--grn:#1b7a3d;--grnbg:#dff3e6;--bkbg:#e5f4ea;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1716;--card:#18231f;--ink:#e8efed;--mute:#9bb0ab;--line:#2c3d38;--acc:#4fb8ae;--redbg:#4a1f1d;--grnbg:#173a26;--bkbg:#18301f;--red:#ff8a80;--grn:#6fd48f}}
+:root[data-theme="dark"]{--bg:#0f1716;--card:#18231f;--ink:#e8efed;--mute:#9bb0ab;--line:#2c3d38;--acc:#4fb8ae;--redbg:#4a1f1d;--grnbg:#173a26;--bkbg:#18301f;--red:#ff8a80;--grn:#6fd48f}
 *{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 'Bricolage Grotesque',system-ui,sans-serif}
 header{padding:18px 16px 0;max-width:1100px;margin:auto}
@@ -23,7 +23,9 @@ main{max-width:1100px;margin:auto;padding:16px}
 .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .dow{text-align:center;font-size:12px;color:var(--mute);padding:4px 0}
 .day{min-height:96px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px;cursor:pointer;text-align:left;font:inherit;color:inherit;overflow:hidden;display:flex;flex-direction:column;gap:2px}
-.day.red{background:var(--redbg);border-color:var(--red)}.day.grn{background:var(--grnbg);border-color:var(--grn)}
+.day.bk{background:var(--bkbg)}
+.key{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;border:1px solid var(--line);background:var(--card)}.key.bk{background:var(--bkbg)}.key.red{border:2px solid var(--red)}.key.grn{border:2px solid var(--grn)}
+.day.red{border:2px solid var(--red)}.day.grn{border:2px solid var(--grn)}
 .day.now .n{background:var(--gold);color:#222;border-radius:99px;padding:0 6px}
 .n{font-weight:700;font-size:13px;align-self:flex-start}
 .chip{font-size:11px;background:var(--acc);color:#fff;border-radius:4px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -151,9 +153,9 @@ function vCal(){
  for(let d=1;d<=n;d++){
   const k=ymd(new Date(y,m,d)),ev=S.ev.filter(x=>x.date==k).sort((a,b)=>a.from>b.from?1:-1),t=tally(k);
   const c=t.a?(t.d<t.a?'red':'grn'):'';
-  h+=`<button class="day ${c} ${k==today()?'now':''}" data-a="day" data-i="${k}"><span class="n">${d}</span>${ev.map(x=>{const ds=daysOf(gk(x));return `<span class="chip">${e(x.from)} ${e(x.event)}${ds.length>1?` · ${ds.findIndex(d=>d.id==x.id)+1}/${ds.length}`:''}</span>`}).join('')}${t.a?`<span class="prog">${t.d}/${t.a} done</span>`:''}</button>`;
+  h+=`<button class="day ${c} ${ev.length?'bk':''} ${k==today()?'now':''}" data-a="day" data-i="${k}"><span class="n">${d}</span>${ev.map(x=>{const ds=daysOf(gk(x));return `<span class="chip">${e(x.from)} ${e(x.event)}${ds.length>1?` · ${ds.findIndex(d=>d.id==x.id)+1}/${ds.length}`:''}</span>`}).join('')}${t.a?`<span class="prog">${t.d}/${t.a} done</span>`:''}</button>`;
  }
- return h+`</div><p class="mute">Red day = to-dos still pending. Green = all ticked. Up to 3 functions per day.</p>`;
+ return h+`</div><p class="mute"><span class="key bk"></span> Light green = function booked · <span class="key red"></span> red border = to-dos pending · <span class="key grn"></span> green border = all to-dos ticked · up to 3 functions per day.</p>`;
 }
 function evCard(x){
  const g=gk(x),ds=daysOf(g),ct=S.ct[g]||{},p=payInfo(g),n=ds.findIndex(d=>d.id==x.id)+1;
