@@ -116,6 +116,8 @@ const amtWords=n=>{n=num(n);const f=(x,u)=>(Math.round(x*100)/100).toLocaleStrin
  return n>=1e7?f(n/1e7,'crore'):n>=1e5?f(n/1e5,'lakh'):n>=1e3?f(n/1e3,'thousand'):n?n+' rupees':''};
 const money=(id,val,extra='')=>`<input id="${id}" type="text" inputmode="numeric" data-money value="${num(val)?num(val).toLocaleString('en-IN'):''}" ${extra}><div class="mute" id="${id}_w">${amtWords(val)}</div>`;
 const stTag=s=>`<span class="tag ${s=='Paid'?'g':s=='Partial'?'y':'r'}">${s}</span>`;
+// most functions the hall takes on one day
+const MAXF=6;
 const booked=k=>S.ev.filter(x=>x.date==k).length;
 // A booking covers one or more days in a row. Each day is its own event (so the calendar and the
 // 3-per-day limit work per day); the days share a booking id `g`, and the booking has one contact
@@ -155,7 +157,7 @@ function vCal(){
   const c=t.a?(t.d<t.a?'red':'grn'):'';
   h+=`<button class="day ${c} ${ev.length?'bk':''} ${k==today()?'now':''}" data-a="day" data-i="${k}"><span class="n">${d}</span>${ev.map(x=>{const ds=daysOf(gk(x));return `<span class="chip">${e(x.from)} ${e(x.event)}${ds.length>1?` · ${ds.findIndex(d=>d.id==x.id)+1}/${ds.length}`:''}</span>`}).join('')}${t.a?`<span class="prog">${t.d}/${t.a} done</span>`:''}</button>`;
  }
- return h+`</div><p class="mute"><span class="key bk"></span> Light green = function booked · <span class="key red"></span> red border = to-dos pending · <span class="key grn"></span> green border = all to-dos ticked · up to 3 functions per day.</p>`;
+ return h+`</div><p class="mute"><span class="key bk"></span> Light green = function booked · <span class="key red"></span> red border = to-dos pending · <span class="key grn"></span> green border = all to-dos ticked · up to ${MAXF} functions per day.</p>`;
 }
 function evCard(x){
  const g=gk(x),ds=daysOf(g),ct=S.ct[g]||{},p=payInfo(g),n=ds.findIndex(d=>d.id==x.id)+1;
@@ -172,7 +174,7 @@ function openDay(k){
  modal(`<div class="bar"><h2>${fd(k)}</h2><button class="b alt sm" data-a="close">Close</button></div>
  ${ev.map(evCard).join('')||'<p class="mute">No functions booked.</p>'}
  ${ts.length?`<div class="card"><h3>To-dos this day</h3>${ts.map(t=>`<div class="mute">${e(t.toName||'')}: ${e(t.title)} — ${t.items.filter(i=>i.d).length}/${t.items.length}</div>`).join('')}</div>`:''}
- ${admin&&ev.length<3?`<button class="b" data-a="newev" data-i="${k}">Add function (${ev.length}/3)</button>`:ev.length>=3?'<p class="mute">Day is full (3 functions).</p>':''}`);
+ ${admin&&ev.length<MAXF?`<button class="b" data-a="newev" data-i="${k}">Add function (${ev.length}/${MAXF})</button>`:ev.length>=MAXF?`<p class="mute">Day is full (${MAXF} functions).</p>`:''}`);
 }
 let BK=null; // the booking open in the form: {g, rows:[{id,date,event,hall,from,to,guests}], orig:[day ids], lead}
 async function evForm(k,id,pre={}){
@@ -258,7 +260,7 @@ function leadList(){
   .sort((a,b)=>(a.next||'9')>(b.next||'9')?1:-1);
  return ls.map(leadCard).join('')||`<p class="mute">${S.leads.length?'No leads match.':'No leads yet. Tap “+ New lead” to add the first one.'}</p>`;
 }
-function clashTag(k){const n=booked(k);return n>=3?'<span class="tag r">Date full (3/3)</span>':n?`<span class="tag y">${n}/3 booked that day</span>`:'<span class="tag g">Date free</span>'}
+function clashTag(k){const n=booked(k);return n>=MAXF?`<span class="tag r">Date full (${MAXF}/${MAXF})</span>`:n?`<span class="tag y">${n}/${MAXF} booked that day</span>`:'<span class="tag g">Date free</span>'}
 function leadCard(l){
  const t=today(),o=isOpen(l),late=o&&l.next&&l.next<t,dueT=o&&l.next==t;
  const meta=[enqOf(l)?'enquired '+dmy(enqOf(l)):'',e(l.type||'Event'),l.date?'wants '+fd(l.date):'date TBD',l.guests?l.guests+' guests':'',l.budget?'budget '+inr(l.budget)+' ('+amtWords(l.budget)+')':'',e(l.hall||''),l.source?'via '+e(l.source):''].filter(Boolean).join(' · ');
@@ -321,7 +323,7 @@ const A={
   if(!host)return toast('Add the host name');
   for(const [i,r] of R.entries())if(!r.event||!r.date||!r.from)return toast(`Day ${i+1}: add the function, date and start time`);
   const mine=new Set(BK.orig);
-  for(const r of R)if(S.ev.filter(x=>x.date==r.date&&!mine.has(x.id)).length>=3)return toast(dmy(r.date)+' already has 3 functions');
+  for(const r of R)if(S.ev.filter(x=>x.date==r.date&&!mine.has(x.id)).length>=MAXF)return toast(dmy(r.date)+` already has ${MAXF} functions`);
   try{
    const refs=R.map(r=>r.id?db.collection('events').doc(r.id):db.collection('events').doc()),g=BK.g||refs[0].id;
    for(const [i,r] of R.entries())await refs[i].set({event:r.event,hall:r.hall,host,guests:+r.guests||0,date:r.date,from:r.from,to:r.to,res:v('f_res'),fac:$('#f_fac').value,g});
@@ -390,7 +392,7 @@ const A={
   try{await db.doc('leads/'+id).update({log:[...(l.log||[]),{t,by:uname,at:Date.now()}]})}catch(x){el.value=t;toast('Could not save note')}
  },
  booklead:id=>{
-  const l=S.leads.find(z=>z.id==id);if(!l)return;if(l.date&&booked(l.date)>=3)return toast('That date already has 3 functions');
+  const l=S.leads.find(z=>z.id==id);if(!l)return;if(l.date&&booked(l.date)>=MAXF)return toast(`That date already has ${MAXF} functions`);
   evForm(l.date||today(),null,{event:l.type,host:l.name,guests:l.guests||'',hall:l.hall||HALLS[0],phone:l.phone,email:l.email,total:l.budget||'',lead:id});
  },
  exportleads:()=>saveFile('hall-desk-leads-'+today()+'.csv',csv([['Name','Phone','Email','Enquiry date','Event type','Wanted date','Guests','Budget','Preferred hall','Source','Status','Next follow-up','Notes','Note history','Added by','Added on'],
